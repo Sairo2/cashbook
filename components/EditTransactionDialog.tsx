@@ -27,54 +27,51 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { TransactionType, Ledger } from '@/lib/supabase';
+import { Transaction, Ledger } from '@/lib/supabase';
 
-interface AddTransactionDialogProps {
+interface EditTransactionDialogProps {
     isOpen: boolean;
     onClose: () => void;
-    type: TransactionType;
+    transaction: Transaction;
     ledger: Ledger;
-    onAdd: (data: any) => void;
+    onSave: (data: any) => void;
 }
 
-export function AddTransactionDialog({
+export function EditTransactionDialog({
     isOpen,
     onClose,
-    type,
+    transaction,
     ledger,
-    onAdd,
-}: AddTransactionDialogProps) {
+    onSave,
+}: EditTransactionDialogProps) {
     const form = useForm({
         defaultValues: {
-            title: '',
-            amount: '',
-            category: '',
-            payment_mode: '',
-            person: '',
+            title: transaction.title,
+            amount: transaction.amount.toString(),
+            category: transaction.category,
+            payment_mode: transaction.payment_mode || ledger.payment_modes[0] || 'Cash',
+            person: transaction.person || '',
         },
     });
 
+    // Reset form when transaction changes
     React.useEffect(() => {
-        // Reset form when dialog opens
-        form.reset({
-            title: '',
-            amount: '',
-            category: '',
-            payment_mode: '',
-            person: '',
-        });
-    }, [ledger, form]);
+        if (transaction) {
+            form.reset({
+                title: transaction.title,
+                amount: transaction.amount.toString(),
+                category: transaction.category,
+                payment_mode: transaction.payment_mode || ledger.payment_modes[0] || 'Cash',
+                person: transaction.person || '',
+            });
+        }
+    }, [transaction, form, ledger]);
 
     const onSubmit = (data: any) => {
-        onAdd({
-            ...data,
-            amount: parseFloat(data.amount),
-            type,
-            ledger_id: ledger.id,
-        });
-        form.reset();
-        onClose();
+        onSave(data);
     };
+
+    const isCashIn = transaction.type === 'cash_in';
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -82,15 +79,15 @@ export function AddTransactionDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-3">
                         <div
-                            className={`p-2.5 rounded-xl ${type === 'cash_in'
+                            className={`p-2.5 rounded-xl ${isCashIn
                                 ? 'bg-emerald-500/10 text-emerald-500'
                                 : 'bg-rose-500/10 text-rose-500'
                                 }`}
                         >
-                            {type === 'cash_in' ? <Plus size={22} /> : <Minus size={22} />}
+                            {isCashIn ? <Plus size={22} /> : <Minus size={22} />}
                         </div>
                         <span className="text-xl">
-                            {type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+                            Edit {isCashIn ? 'Cash In' : 'Cash Out'}
                         </span>
                     </DialogTitle>
                 </DialogHeader>
@@ -121,7 +118,7 @@ export function AddTransactionDialog({
                             name="amount"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Amount</FormLabel>
+                                    <FormLabel>Amount (₹)</FormLabel>
                                     <FormControl>
                                         <Input
                                             type="number"
@@ -129,7 +126,7 @@ export function AddTransactionDialog({
                                             placeholder="0.00"
                                             {...field}
                                             required
-                                            className="h-14 text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-1 focus-visible:ring-primary/50"
+                                            className="h-14 text-2xl font-bold"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -207,12 +204,12 @@ export function AddTransactionDialog({
                         <DialogFooter className="pt-2">
                             <Button
                                 type="submit"
-                                className={`w-full h-14 text-lg font-semibold ${type === 'cash_in'
+                                className={`w-full h-14 text-lg font-semibold ${isCashIn
                                     ? 'cash-in-gradient'
                                     : 'cash-out-gradient'
                                     } hover:opacity-90`}
                             >
-                                Save {type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+                                Update Transaction
                             </Button>
                         </DialogFooter>
                     </form>

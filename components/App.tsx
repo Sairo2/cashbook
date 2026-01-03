@@ -35,12 +35,24 @@ export function App() {
         await signOut();
     };
 
+    // Handle ledger update from dashboard
+    const handleLedgerUpdated = (updatedLedger: Ledger) => {
+        setSelectedLedger(updatedLedger);
+    };
+
+    // Handle ledger deletion from dashboard
+    const handleLedgerDeleted = () => {
+        setSelectedLedger(null);
+    };
+
     if (selectedLedger) {
         return (
             <LedgerDashboard
                 ledger={selectedLedger}
                 onBack={() => setSelectedLedger(null)}
                 userId={session.user.id}
+                onLedgerUpdated={handleLedgerUpdated}
+                onLedgerDeleted={handleLedgerDeleted}
             />
         );
     }
@@ -75,7 +87,6 @@ export function App() {
                         className="text-muted-foreground hover:text-foreground"
                     >
                         <LogOut className="w-4 h-4 mr-2" />
-                        Sign out
                     </Button>
                 </div>
             </div>

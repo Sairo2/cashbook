@@ -45,7 +45,6 @@ export const DEFAULT_CATEGORIES = [
 export const DEFAULT_PAYMENT_MODES = [
     'Cash',
     'UPI',
-    'Card',
-    'Bank Transfer',
-    'Cheque'
+    'Credit Card',
+    'Debit Card'
 ];

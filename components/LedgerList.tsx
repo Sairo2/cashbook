@@ -49,7 +49,18 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
     }
 
     return (
-        <div className="min-h-screen pb-24">
+        <div className="min-h-screen pb-24 relative">
+            {/* Background Image - Mobile width only */}
+            <div
+                className="fixed inset-0 z-0 opacity-30 max-w-md mx-auto left-0 right-0"
+                style={{
+                    backgroundImage: 'url(/dashboard-bg.png)',
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                }}
+            />
+
             {/* Header */}
             <div className="px-4 pt-6 pb-4">
                 <div className="flex items-center gap-3 mb-2">

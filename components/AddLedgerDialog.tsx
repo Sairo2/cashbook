@@ -12,15 +12,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DEFAULT_CATEGORIES, DEFAULT_PAYMENT_MODES } from '@/lib/supabase';
+import { DEFAULT_CATEGORIES, DEFAULT_PAYMENT_MODES, Ledger } from '@/lib/supabase';
 
 interface AddLedgerDialogProps {
     isOpen: boolean;
     onClose: () => void;
     onAdd: (name: string, categories: string[], paymentModes: string[]) => void;
+    editLedger?: Ledger | null;
 }
 
-export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps) {
+export function AddLedgerDialog({ isOpen, onClose, onAdd, editLedger }: AddLedgerDialogProps) {
     const [name, setName] = React.useState('');
     const [categories, setCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [paymentModes, setPaymentModes] = React.useState<string[]>(DEFAULT_PAYMENT_MODES);
@@ -28,6 +29,19 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
     const [newPaymentMode, setNewPaymentMode] = React.useState('');
     const [showAddCategory, setShowAddCategory] = React.useState(false);
     const [showAddPaymentMode, setShowAddPaymentMode] = React.useState(false);
+
+    const isEditMode = !!editLedger;
+
+    // Populate form when editing
+    React.useEffect(() => {
+        if (editLedger) {
+            setName(editLedger.name);
+            setCategories(editLedger.categories || DEFAULT_CATEGORIES);
+            setPaymentModes(editLedger.payment_modes || DEFAULT_PAYMENT_MODES);
+        } else {
+            resetForm();
+        }
+    }, [editLedger, isOpen]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -78,11 +92,25 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
         }
     };
 
+    // Get all unique categories including custom ones from edit mode
+    const allCategories = React.useMemo(() => {
+        const customCategories = categories.filter(c => !DEFAULT_CATEGORIES.includes(c));
+        return [...DEFAULT_CATEGORIES, ...customCategories];
+    }, [categories]);
+
+    // Get all unique payment modes including custom ones from edit mode
+    const allPaymentModes = React.useMemo(() => {
+        const customModes = paymentModes.filter(m => !DEFAULT_PAYMENT_MODES.includes(m));
+        return [...DEFAULT_PAYMENT_MODES, ...customModes];
+    }, [paymentModes]);
+
     return (
         <Dialog open={isOpen} onOpenChange={() => { onClose(); resetForm(); }}>
             <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto bg-card border-border rounded-2xl">
                 <DialogHeader>
-                    <DialogTitle className="text-xl">Create New Ledger</DialogTitle>
+                    <DialogTitle className="text-xl">
+                        {isEditMode ? 'Edit Ledger' : 'Create New Ledger'}
+                    </DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-6 py-4">
@@ -105,7 +133,7 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
                             Select the categories for this ledger
                         </p>
                         <div className="flex flex-wrap gap-2">
-                            {DEFAULT_CATEGORIES.map((category) => (
+                            {allCategories.map((category) => (
                                 <button
                                     key={category}
                                     type="button"
@@ -113,21 +141,11 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
                                     className={`pill ${categories.includes(category) ? 'selected' : ''}`}
                                 >
                                     {category}
+                                    {!DEFAULT_CATEGORIES.includes(category) && categories.includes(category) && (
+                                        <X className="h-3 w-3 ml-1" />
+                                    )}
                                 </button>
                             ))}
-                            {categories
-                                .filter(c => !DEFAULT_CATEGORIES.includes(c))
-                                .map((category) => (
-                                    <button
-                                        key={category}
-                                        type="button"
-                                        onClick={() => toggleCategory(category)}
-                                        className="pill selected"
-                                    >
-                                        {category}
-                                        <X className="h-3 w-3 ml-1" />
-                                    </button>
-                                ))}
                             {showAddCategory ? (
                                 <div className="flex gap-2 items-center">
                                     <Input
@@ -168,7 +186,7 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
                             Select the payment modes for this ledger
                         </p>
                         <div className="flex flex-wrap gap-2">
-                            {DEFAULT_PAYMENT_MODES.map((mode) => (
+                            {allPaymentModes.map((mode) => (
                                 <button
                                     key={mode}
                                     type="button"
@@ -176,21 +194,11 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
                                     className={`pill ${paymentModes.includes(mode) ? 'selected' : ''}`}
                                 >
                                     {mode}
+                                    {!DEFAULT_PAYMENT_MODES.includes(mode) && paymentModes.includes(mode) && (
+                                        <X className="h-3 w-3 ml-1" />
+                                    )}
                                 </button>
                             ))}
-                            {paymentModes
-                                .filter(m => !DEFAULT_PAYMENT_MODES.includes(m))
-                                .map((mode) => (
-                                    <button
-                                        key={mode}
-                                        type="button"
-                                        onClick={() => togglePaymentMode(mode)}
-                                        className="pill selected"
-                                    >
-                                        {mode}
-                                        <X className="h-3 w-3 ml-1" />
-                                    </button>
-                                ))}
                             {showAddPaymentMode ? (
                                 <div className="flex gap-2 items-center">
                                     <Input
@@ -230,7 +238,7 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
                             className="w-full h-12 text-lg font-semibold cash-in-gradient hover:opacity-90"
                             disabled={!name.trim()}
                         >
-                            Create Ledger
+                            {isEditMode ? 'Update Ledger' : 'Create Ledger'}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -238,3 +246,4 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd }: AddLedgerDialogProps
         </Dialog>
     );
 }
+

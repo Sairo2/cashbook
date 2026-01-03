@@ -14,25 +14,52 @@ import {
     Search,
     ArrowLeft,
     BarChart3,
-    List
+    List,
+    MoreVertical,
+    Pencil,
+    Trash2,
+    Download
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Transaction, TransactionType, Ledger } from '@/lib/supabase';
-import { getTransactionsByLedger, createTransaction } from '@/lib/store';
+import { getCategoryIcon } from '@/lib/category-icons';
+import { getTransactionsByLedger, createTransaction, updateLedger, deleteLedger } from '@/lib/store';
 import { AddTransactionDialog } from './AddTransactionDialog';
 import { SummaryCharts } from './SummaryCharts';
+import { AddLedgerDialog } from './AddLedgerDialog';
+import { TransactionDetailDialog } from './TransactionDetailDialog';
+import { exportLedgerToPDF } from '@/lib/export-pdf';
 
 interface LedgerDashboardProps {
     ledger: Ledger;
     onBack: () => void;
     userId: string;
+    onLedgerUpdated?: (ledger: Ledger) => void;
+    onLedgerDeleted?: (ledgerId: string) => void;
 }
 
-export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps) {
+export function LedgerDashboard({ ledger, onBack, userId, onLedgerUpdated, onLedgerDeleted }: LedgerDashboardProps) {
+    const [currentLedger, setCurrentLedger] = React.useState<Ledger>(ledger);
     const [transactions, setTransactions] = React.useState<Transaction[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
@@ -40,13 +67,26 @@ export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps
     const [searchQuery, setSearchQuery] = React.useState('');
     const [activeTab, setActiveTab] = React.useState('transactions');
 
+    // Edit/Delete ledger state
+    const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+    const [isDeleting, setIsDeleting] = React.useState(false);
+
+    // Transaction detail state
+    const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null);
+    const [isTransactionDetailOpen, setIsTransactionDetailOpen] = React.useState(false);
+
     React.useEffect(() => {
         loadTransactions();
-    }, [ledger.id]);
+    }, [currentLedger.id]);
+
+    React.useEffect(() => {
+        setCurrentLedger(ledger);
+    }, [ledger]);
 
     const loadTransactions = async () => {
         setLoading(true);
-        const storedTransactions = await getTransactionsByLedger(ledger.id);
+        const storedTransactions = await getTransactionsByLedger(currentLedger.id);
         setTransactions(storedTransactions);
         setLoading(false);
     };
@@ -61,6 +101,53 @@ export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps
     const openAddDialog = (type: TransactionType) => {
         setDialogType(type);
         setIsDialogOpen(true);
+    };
+
+    // Handle transaction click
+    const handleTransactionClick = (transaction: Transaction) => {
+        setSelectedTransaction(transaction);
+        setIsTransactionDetailOpen(true);
+    };
+
+    // Handle transaction update
+    const handleTransactionUpdated = (updatedTransaction: Transaction) => {
+        setTransactions(transactions.map(t =>
+            t.id === updatedTransaction.id ? updatedTransaction : t
+        ));
+        setSelectedTransaction(updatedTransaction);
+    };
+
+    // Handle transaction delete
+    const handleTransactionDeleted = (transactionId: string) => {
+        setTransactions(transactions.filter(t => t.id !== transactionId));
+        setIsTransactionDetailOpen(false);
+        setSelectedTransaction(null);
+    };
+
+    // Handle ledger edit
+    const handleEditLedger = async (name: string, categories: string[], paymentModes: string[]) => {
+        const updated = await updateLedger(currentLedger.id, {
+            name,
+            categories,
+            payment_modes: paymentModes,
+        });
+        if (updated) {
+            setCurrentLedger(updated);
+            onLedgerUpdated?.(updated);
+        }
+        setIsEditDialogOpen(false);
+    };
+
+    // Handle ledger delete
+    const handleDeleteLedger = async () => {
+        setIsDeleting(true);
+        const success = await deleteLedger(currentLedger.id);
+        if (success) {
+            onLedgerDeleted?.(currentLedger.id);
+            onBack();
+        }
+        setIsDeleting(false);
+        setIsDeleteDialogOpen(false);
     };
 
     const totalIn = transactions
@@ -90,52 +177,78 @@ export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps
                         <ArrowLeft className="h-5 w-5" />
                     </button>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-lg font-bold truncate">{ledger.name}</h1>
+                        <h1 className="text-lg font-bold truncate">{currentLedger.name}</h1>
                         <p className="text-xs text-muted-foreground">
                             {transactions.length} transactions
                         </p>
                     </div>
+
+                    {/* Ellipsis Menu */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button className="p-2 -mr-2 rounded-xl hover:bg-accent/20 transition-colors">
+                                <MoreVertical className="h-5 w-5" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                                onClick={() => setIsEditDialogOpen(true)}
+                                className="cursor-pointer"
+                            >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit Ledger
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => exportLedgerToPDF(currentLedger, transactions)}
+                                className="cursor-pointer"
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Export PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onClick={() => setIsDeleteDialogOpen(true)}
+                                className="cursor-pointer text-destructive focus:text-destructive"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Ledger
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
             {/* Summary Cards */}
-            <div className="px-4 py-4 space-y-3">
-                <div className="grid grid-cols-3 gap-3">
-                    <Card className="glass-card border-none">
-                        <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Balance</span>
-                                <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-                            </div>
-                            <div className={`text-lg font-bold ${balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                ₹{balance.toLocaleString()}
-                            </div>
-                        </CardContent>
-                    </Card>
+            <div className="px-4 pt-3 pb-2">
+                <div className="grid grid-cols-3 gap-2 pb-4">
+                    <div className="bg-accent/20 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <Wallet className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Balance</span>
+                        </div>
+                        <div className={`text-base font-bold ${balance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            ₹{balance.toLocaleString()}
+                        </div>
+                    </div>
 
-                    <Card className="glass-card border-none">
-                        <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-emerald-500 uppercase tracking-wide">In</span>
-                                <ArrowUpCircle className="h-3.5 w-3.5 text-emerald-500" />
-                            </div>
-                            <div className="text-lg font-bold text-emerald-500">
-                                ₹{totalIn.toLocaleString()}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="bg-emerald-500/10 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <ArrowUpCircle className="h-3 w-3 text-emerald-500" />
+                            <span className="text-[10px] text-emerald-500/80 uppercase tracking-wide">In</span>
+                        </div>
+                        <div className="text-base font-bold text-emerald-500">
+                            ₹{totalIn.toLocaleString()}
+                        </div>
+                    </div>
 
-                    <Card className="glass-card border-none">
-                        <CardContent className="p-3">
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] text-rose-500 uppercase tracking-wide">Out</span>
-                                <ArrowDownCircle className="h-3.5 w-3.5 text-rose-500" />
-                            </div>
-                            <div className="text-lg font-bold text-rose-500">
-                                ₹{totalOut.toLocaleString()}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <div className="bg-rose-500/10 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <ArrowDownCircle className="h-3 w-3 text-rose-500" />
+                            <span className="text-[10px] text-rose-500/80 uppercase tracking-wide">Out</span>
+                        </div>
+                        <div className="text-base font-bold text-rose-500">
+                            ₹{totalOut.toLocaleString()}
+                        </div>
+                    </div>
                 </div>
 
                 {/* View Toggle */}
@@ -164,62 +277,55 @@ export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps
                         </div>
 
                         {/* Transaction List */}
-                        <div className="space-y-2.5">
+                        <div className="space-y-1.5">
                             {loading ? (
-                                <div className="text-center py-16">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                                    <p className="text-muted-foreground mt-4 text-sm">Loading...</p>
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
+                                    <p className="text-muted-foreground mt-3 text-sm">Loading...</p>
                                 </div>
                             ) : filteredTransactions.length === 0 ? (
-                                <div className="text-center py-16 text-muted-foreground">
-                                    <div className="bg-accent/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Wallet className="h-8 w-8 opacity-20" />
+                                <div className="text-center py-12 text-muted-foreground">
+                                    <div className="bg-accent/20 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <Wallet className="h-6 w-6 opacity-20" />
                                     </div>
-                                    <p>No transactions found</p>
-                                    <p className="text-sm mt-1">Add your first transaction!</p>
+                                    <p className="text-sm">No transactions found</p>
+                                    <p className="text-xs mt-0.5">Add your first transaction!</p>
                                 </div>
                             ) : (
-                                filteredTransactions.map((t, index) => (
-                                    <Card
-                                        key={t.id}
-                                        className="glass-card border-none active:scale-[0.98] transition-transform animate-slide-up"
-                                        style={{ animationDelay: `${index * 30}ms` }}
-                                    >
-                                        <CardContent className="p-3.5">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex gap-3 items-start flex-1 min-w-0">
-                                                    <div className={`p-2.5 rounded-xl shrink-0 ${t.type === 'cash_in' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                                                        {t.type === 'cash_in' ? <ArrowUpCircle size={20} /> : <ArrowDownCircle size={20} />}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <h3 className="font-semibold truncate">{t.title}</h3>
-                                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                                            {format(new Date(t.created_at), 'dd MMM, hh:mm a')}
-                                                        </p>
-                                                        <div className="flex flex-wrap gap-1.5 mt-2">
-                                                            <Badge variant="secondary" className="bg-accent/30 text-[10px] px-2 py-0.5">
-                                                                <CategoryIcon className="h-2.5 w-2.5 mr-1" /> {t.category}
-                                                            </Badge>
-                                                            {t.payment_mode && (
-                                                                <Badge variant="secondary" className="bg-accent/30 text-[10px] px-2 py-0.5">
-                                                                    <CreditCard className="h-2.5 w-2.5 mr-1" /> {t.payment_mode}
-                                                                </Badge>
-                                                            )}
-                                                            {t.person && (
-                                                                <Badge variant="secondary" className="bg-accent/30 text-[10px] px-2 py-0.5">
-                                                                    <User className="h-2.5 w-2.5 mr-1" /> {t.person}
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className={`text-base font-bold shrink-0 ${t.type === 'cash_in' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                filteredTransactions.map((t, index) => {
+                                    const IconComponent = getCategoryIcon(t.category);
+                                    return (
+                                        <div
+                                            key={t.id}
+                                            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-accent/5 hover:bg-accent/10 active:scale-[0.98] transition-all cursor-pointer animate-slide-up"
+                                            style={{ animationDelay: `${index * 20}ms` }}
+                                            onClick={() => handleTransactionClick(t)}
+                                        >
+                                            {/* Category Icon */}
+                                            <div className="p-2 rounded-lg shrink-0 bg-accent/30">
+                                                <IconComponent className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+
+                                            {/* Title and Date */}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-sm font-medium truncate">{t.title}</h3>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    {format(new Date(t.created_at), 'MMM dd')} • {format(new Date(t.created_at), 'h:mm a')}
+                                                </p>
+                                            </div>
+
+                                            {/* Amount and Category */}
+                                            <div className="shrink-0 text-right">
+                                                <div className={`text-sm font-semibold ${t.type === 'cash_in' ? 'text-emerald-500' : 'text-rose-500'}`}>
                                                     {t.type === 'cash_in' ? '+' : '-'}₹{t.amount.toLocaleString()}
                                                 </div>
+                                                <span className="inline-block text-[10px] text-muted-foreground bg-accent/40 px-1.5 py-0.5 rounded-md mt-0.5">
+                                                    {t.category}
+                                                </span>
                                             </div>
-                                        </CardContent>
-                                    </Card>
-                                ))
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     </TabsContent>
@@ -254,8 +360,53 @@ export function LedgerDashboard({ ledger, onBack, userId }: LedgerDashboardProps
                 isOpen={isDialogOpen}
                 onClose={() => setIsDialogOpen(false)}
                 type={dialogType}
-                ledger={ledger}
+                ledger={currentLedger}
                 onAdd={handleAdd}
+            />
+
+            {/* Edit Ledger Dialog */}
+            <AddLedgerDialog
+                isOpen={isEditDialogOpen}
+                onClose={() => setIsEditDialogOpen(false)}
+                onAdd={handleEditLedger}
+                editLedger={currentLedger}
+            />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Ledger</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted-foreground">
+                            Are you sure you want to delete <span className="font-semibold text-foreground">"{currentLedger.name}"</span>?
+                            This will permanently delete the ledger and all {transactions.length} transactions.
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-row gap-2 sm:gap-2">
+                        <AlertDialogCancel className="flex-1 mt-0">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteLedger}
+                            disabled={isDeleting}
+                            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isDeleting ? 'Deleting...' : 'Delete'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Transaction Detail Dialog */}
+            <TransactionDetailDialog
+                transaction={selectedTransaction}
+                ledger={currentLedger}
+                isOpen={isTransactionDetailOpen}
+                onClose={() => {
+                    setIsTransactionDetailOpen(false);
+                    setSelectedTransaction(null);
+                }}
+                onTransactionUpdated={handleTransactionUpdated}
+                onTransactionDeleted={handleTransactionDeleted}
             />
         </div>
     );

@@ -1,67 +1,33 @@
 'use client';
 
 import * as React from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { Pie, PieChart, Bar, BarChart, XAxis, YAxis, Cell } from 'recharts';
 import { Transaction } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
+import { PieChartIcon, BarChart3 } from 'lucide-react';
 
 interface SummaryChartsProps {
     transactions: Transaction[];
 }
 
-const COLORS = [
-    'oklch(0.65 0.18 160)',  // emerald
-    'oklch(0.65 0.18 280)',  // purple
-    'oklch(0.75 0.18 75)',   // amber
-    'oklch(0.6 0.18 245)',   // blue
-    'oklch(0.65 0.15 180)',  // teal
-    'oklch(0.7 0.18 350)',   // pink
-    'oklch(0.65 0.22 25)',   // rose
-    'oklch(0.55 0.2 280)',   // indigo
-    'oklch(0.7 0.15 120)',   // lime
-    'oklch(0.6 0.2 30)',     // orange
+const CHART_COLORS = [
+    'hsl(160, 60%, 45%)',   // emerald
+    'hsl(280, 60%, 55%)',   // purple
+    'hsl(45, 80%, 55%)',    // amber
+    'hsl(210, 70%, 50%)',   // blue
+    'hsl(180, 50%, 45%)',   // teal
+    'hsl(330, 60%, 55%)',   // pink
+    'hsl(0, 65%, 55%)',     // rose
+    'hsl(260, 60%, 45%)',   // indigo
+    'hsl(90, 50%, 50%)',    // lime
+    'hsl(25, 80%, 55%)',    // orange
 ];
 
-const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-card/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-lg">
-                <p className="text-sm font-medium">{payload[0].name}</p>
-                <p className="text-lg font-bold text-primary">
-                    ₹{payload[0].value.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                    {((payload[0].value / payload[0].payload.total) * 100).toFixed(1)}%
-                </p>
-            </div>
-        );
-    }
-    return null;
-};
-
-const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-    if (percent < 0.05) return null; // Don't show labels for very small slices
-    const RADIAN = Math.PI / 180;
-    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + radius * Math.cos(-midAngle * RADIAN);
-    const y = cy + radius * Math.sin(-midAngle * RADIAN);
-
-    return (
-        <text
-            x={x}
-            y={y}
-            fill="white"
-            textAnchor="middle"
-            dominantBaseline="central"
-            className="text-xs font-medium"
-        >
-            {`${(percent * 100).toFixed(0)}%`}
-        </text>
-    );
-};
-
 export function SummaryCharts({ transactions }: SummaryChartsProps) {
+    const [chartType, setChartType] = React.useState<'pie' | 'bar'>('pie');
+
     // Only consider cash_out for expense analysis
     const expenses = transactions.filter(t => t.type === 'cash_out');
     const income = transactions.filter(t => t.type === 'cash_in');
@@ -75,9 +41,13 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             grouped[t.category] = (grouped[t.category] || 0) + t.amount;
         });
         return Object.entries(grouped)
-            .map(([name, value]) => ({ name, value, total: totalExpenses }))
+            .map(([name, value], index) => ({
+                name,
+                value,
+                fill: CHART_COLORS[index % CHART_COLORS.length]
+            }))
             .sort((a, b) => b.value - a.value);
-    }, [expenses, totalExpenses]);
+    }, [expenses]);
 
     // Group by person
     const personData = React.useMemo(() => {
@@ -86,9 +56,12 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             const person = t.person || 'Unknown';
             grouped[person] = (grouped[person] || 0) + t.amount;
         });
-        const total = Object.values(grouped).reduce((sum, v) => sum + v, 0);
         return Object.entries(grouped)
-            .map(([name, value]) => ({ name, value, total }))
+            .map(([name, value], index) => ({
+                name,
+                value,
+                fill: CHART_COLORS[index % CHART_COLORS.length]
+            }))
             .sort((a, b) => b.value - a.value);
     }, [transactions]);
 
@@ -99,9 +72,12 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             const mode = t.payment_mode || 'Unknown';
             grouped[mode] = (grouped[mode] || 0) + t.amount;
         });
-        const total = Object.values(grouped).reduce((sum, v) => sum + v, 0);
         return Object.entries(grouped)
-            .map(([name, value]) => ({ name, value, total }))
+            .map(([name, value], index) => ({
+                name,
+                value,
+                fill: CHART_COLORS[index % CHART_COLORS.length]
+            }))
             .sort((a, b) => b.value - a.value);
     }, [transactions]);
 
@@ -112,9 +88,25 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             grouped[t.category] = (grouped[t.category] || 0) + t.amount;
         });
         return Object.entries(grouped)
-            .map(([name, value]) => ({ name, value, total: totalIncome }))
+            .map(([name, value], index) => ({
+                name,
+                value,
+                fill: CHART_COLORS[index % CHART_COLORS.length]
+            }))
             .sort((a, b) => b.value - a.value);
-    }, [income, totalIncome]);
+    }, [income]);
+
+    // Generate chart config dynamically
+    const generateChartConfig = (data: Array<{ name: string; fill: string }>) => {
+        const config: ChartConfig = {};
+        data.forEach((item) => {
+            config[item.name] = {
+                label: item.name,
+                color: item.fill,
+            };
+        });
+        return config;
+    };
 
     if (transactions.length === 0) {
         return (
@@ -126,58 +118,154 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
         );
     }
 
-    const renderPieChart = (data: Array<{ name: string; value: number; total: number }>, title: string) => (
-        <div className="space-y-2">
-            <h4 className="text-sm font-medium text-center text-muted-foreground">{title}</h4>
-            {data.length === 0 ? (
-                <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                    No data available
-                </div>
-            ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={renderCustomLabel}
-                            outerRadius={80}
-                            innerRadius={40}
-                            fill="#8884d8"
-                            dataKey="value"
-                            paddingAngle={2}
-                        >
-                            {data.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                    </PieChart>
-                </ResponsiveContainer>
-            )}
-            {/* Legend */}
-            <div className="flex flex-wrap gap-2 justify-center px-2">
-                {data.slice(0, 6).map((item, index) => (
-                    <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                        <div
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <span className="text-muted-foreground">{item.name}</span>
+    const renderPieChart = (data: Array<{ name: string; value: number; fill: string }>, title: string) => {
+        const chartConfig = generateChartConfig(data);
+        const total = data.reduce((sum, d) => sum + d.value, 0);
+
+        return (
+            <div className="space-y-3">
+                <h4 className="text-sm font-medium text-center text-muted-foreground">{title}</h4>
+                {data.length === 0 ? (
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+                        No data available
                     </div>
-                ))}
-                {data.length > 6 && (
-                    <span className="text-xs text-muted-foreground">+{data.length - 6} more</span>
+                ) : (
+                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[220px]">
+                        <PieChart>
+                            <ChartTooltip
+                                content={
+                                    <ChartTooltipContent
+                                        nameKey="name"
+                                        formatter={(value) => `₹${Number(value).toLocaleString()}`}
+                                    />
+                                }
+                            />
+                            <Pie
+                                data={data}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={85}
+                                paddingAngle={2}
+                                label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                                labelLine={false}
+                            >
+                                {data.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                            </Pie>
+                        </PieChart>
+                    </ChartContainer>
+                )}
+                {/* Legend */}
+                <div className="flex flex-wrap gap-2 justify-center px-2">
+                    {data.slice(0, 6).map((item) => (
+                        <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                            <div
+                                className="w-2.5 h-2.5 rounded-full"
+                                style={{ backgroundColor: item.fill }}
+                            />
+                            <span className="text-muted-foreground">{item.name}</span>
+                        </div>
+                    ))}
+                    {data.length > 6 && (
+                        <span className="text-xs text-muted-foreground">+{data.length - 6} more</span>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    const renderBarChart = (data: Array<{ name: string; value: number; fill: string }>, title: string) => {
+        const chartConfig = generateChartConfig(data);
+
+        return (
+            <div className="space-y-3">
+                <h4 className="text-sm font-medium text-center text-muted-foreground">{title}</h4>
+                {data.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
+                        No data available
+                    </div>
+                ) : (
+                    <ChartContainer config={chartConfig} className="h-[220px] w-full">
+                        <BarChart
+                            data={data}
+                            layout="vertical"
+                            margin={{ left: 0, right: 20 }}
+                        >
+                            <YAxis
+                                dataKey="name"
+                                type="category"
+                                tickLine={false}
+                                tickMargin={8}
+                                axisLine={false}
+                                width={70}
+                                tick={{ fontSize: 10 }}
+                            />
+                            <XAxis
+                                type="number"
+                                hide
+                            />
+                            <ChartTooltip
+                                content={
+                                    <ChartTooltipContent
+                                        nameKey="name"
+                                        formatter={(value) => `₹${Number(value).toLocaleString()}`}
+                                    />
+                                }
+                            />
+                            <Bar
+                                dataKey="value"
+                                radius={[0, 4, 4, 0]}
+                            >
+                                {data.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ChartContainer>
                 )}
             </div>
-        </div>
-    );
+        );
+    };
+
+    const renderChart = (data: Array<{ name: string; value: number; fill: string }>, title: string) => {
+        return chartType === 'pie' ? renderPieChart(data, title) : renderBarChart(data, title);
+    };
 
     return (
         <Card className="glass-card border-none">
             <CardHeader className="pb-2">
-                <CardTitle className="text-lg">Summary</CardTitle>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">Summary</CardTitle>
+                    {/* Chart Type Toggle */}
+                    <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-lg p-1">
+                        <button
+                            onClick={() => setChartType('pie')}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'pie'
+                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                                }`}
+                            title="Pie Chart"
+                        >
+                            <PieChartIcon className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Pie</span>
+                        </button>
+                        <button
+                            onClick={() => setChartType('bar')}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'bar'
+                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                                }`}
+                            title="Bar Chart"
+                        >
+                            <BarChart3 className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Bar</span>
+                        </button>
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
                 <Tabs defaultValue="expense-category" className="w-full">
@@ -196,16 +284,16 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="expense-category" className="mt-4">
-                        {renderPieChart(categoryData, `Expenses by Category (₹${totalExpenses.toLocaleString()})`)}
+                        {renderChart(categoryData, `Expenses by Category (₹${totalExpenses.toLocaleString()})`)}
                     </TabsContent>
                     <TabsContent value="income-category" className="mt-4">
-                        {renderPieChart(incomeCategoryData, `Income by Category (₹${totalIncome.toLocaleString()})`)}
+                        {renderChart(incomeCategoryData, `Income by Category (₹${totalIncome.toLocaleString()})`)}
                     </TabsContent>
                     <TabsContent value="person" className="mt-4">
-                        {renderPieChart(personData, 'Transactions by Person')}
+                        {renderChart(personData, 'Transactions by Person')}
                     </TabsContent>
                     <TabsContent value="payment" className="mt-4">
-                        {renderPieChart(paymentModeData, 'Transactions by Payment Mode')}
+                        {renderChart(paymentModeData, 'Transactions by Payment Mode')}
                     </TabsContent>
                 </Tabs>
             </CardContent>

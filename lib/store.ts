@@ -71,10 +71,24 @@ export async function deleteLedger(id: string): Promise<boolean> {
 }
 
 export async function updateLedger(id: string, updates: Partial<Ledger>): Promise<Ledger | null> {
+    // First get the existing ledger
+    const existing = await getLedgerById(id);
+    if (!existing) {
+        console.error('Ledger not found');
+        return null;
+    }
+
+    // Use upsert to update (works around some CORS/RLS issues)
     const { data, error } = await supabase
         .from('ledgers')
-        .update(updates)
-        .eq('id', id)
+        .upsert({
+            id: existing.id,
+            user_id: existing.user_id,
+            created_at: existing.created_at,
+            name: updates.name ?? existing.name,
+            categories: updates.categories ?? existing.categories,
+            payment_modes: updates.payment_modes ?? existing.payment_modes,
+        })
         .select()
         .single();
 
@@ -144,14 +158,45 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     return true;
 }
 
+export async function getTransactionById(id: string): Promise<Transaction | null> {
+    const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (error) {
+        console.error('Error fetching transaction:', error);
+        return null;
+    }
+    return data;
+}
+
 export async function updateTransaction(
     id: string,
     updates: Partial<Transaction>
 ): Promise<Transaction | null> {
+    // First get the existing transaction
+    const existing = await getTransactionById(id);
+    if (!existing) {
+        console.error('Transaction not found');
+        return null;
+    }
+
+    // Use upsert to update (works around some CORS/RLS issues)
     const { data, error } = await supabase
         .from('transactions')
-        .update(updates)
-        .eq('id', id)
+        .upsert({
+            id: existing.id,
+            ledger_id: existing.ledger_id,
+            created_at: existing.created_at,
+            title: updates.title ?? existing.title,
+            amount: updates.amount ?? existing.amount,
+            type: updates.type ?? existing.type,
+            category: updates.category ?? existing.category,
+            payment_mode: updates.payment_mode ?? existing.payment_mode,
+            person: updates.person ?? existing.person,
+        })
         .select()
         .single();
 
