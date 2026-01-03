@@ -52,7 +52,7 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
         <div className="min-h-screen pb-24 relative">
             {/* Background Image - Mobile width only */}
             <div
-                className="fixed inset-0 z-0 opacity-30 max-w-md mx-auto left-0 right-0"
+                className="fixed inset-0 z-0 opacity-30 max-w-md mx-auto left-0 right-0 pointer-events-none"
                 style={{
                     backgroundImage: 'url(/dashboard-bg.png)',
                     backgroundSize: 'cover',
