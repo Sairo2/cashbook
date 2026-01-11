@@ -297,7 +297,7 @@ export function LedgerDashboard({ ledger, onBack, userId, onLedgerUpdated, onLed
                                     return (
                                         <div
                                             key={t.id}
-                                            className="flex items-center gap-2.5 p-2.5 rounded-xl bg-accent/5 hover:bg-accent/10 active:scale-[0.98] transition-all cursor-pointer animate-slide-up"
+                                            className="flex items-center gap-2 p-2 rounded-xl bg-accent/5 hover:bg-accent/10 active:scale-[0.98] transition-all cursor-pointer animate-slide-up"
                                             style={{ animationDelay: `${index * 20}ms` }}
                                             onClick={() => handleTransactionClick(t)}
                                         >

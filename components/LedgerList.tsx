@@ -52,25 +52,14 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
     }
 
     return (
-        <div className="min-h-screen pb-24 relative">
-            {/* Background Image - Mobile width only */}
-            <div
-                className="fixed inset-0 z-0 opacity-30 max-w-md mx-auto left-0 right-0 pointer-events-none"
-                style={{
-                    backgroundImage: 'url(/dashboard-bg.png)',
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                }}
-            />
-
+        <div className="min-h-screen pb-24">
             {/* Header */}
             <div className="px-4 pt-6 pb-4">
                 <div className="flex items-center gap-3 mb-2">
-                    <div className="p-2 rounded-xl bg-primary/10">
+                    <div className="p-2 rounded-xl bg-primary/20">
                         <Wallet className="h-6 w-6 text-primary" />
                     </div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                    <h1 className="text-2xl font-bold">
                         My Ledgers
                     </h1>
                 </div>
@@ -106,26 +95,28 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                             return (
                                 <Card
                                     key={ledger.id}
-                                    className={`glass-card border-none cursor-pointer hover:bg-accent/10 transition-all active:scale-[0.98] animate-slide-up ${isLendingsLedger ? 'border border-emerald-500/30 bg-emerald-500/5' : ''
+                                    className={`cursor-pointer transition-all active:scale-[0.98] animate-slide-up border ${isLendingsLedger
+                                        ? 'border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10'
+                                        : 'border-border hover:bg-accent/50'
                                         }`}
                                     style={{ animationDelay: `${index * 50}ms` }}
                                     onClick={() => onSelectLedger(ledger)}
                                 >
-                                    <CardContent className="p-4 flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`p-3 rounded-xl ${isLendingsLedger
-                                                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
-                                                    : 'bg-primary/10'
+                                    <CardContent className="p-3 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${isLendingsLedger
+                                                ? 'bg-emerald-500/20'
+                                                : 'bg-primary/10'
                                                 }`}>
                                                 {isLendingsLedger ? (
-                                                    <Send className="h-6 w-6 text-white" />
+                                                    <Send className="h-5 w-5 text-emerald-500" />
                                                 ) : (
-                                                    <Book className="h-6 w-6 text-primary" />
+                                                    <Book className="h-5 w-5 text-primary" />
                                                 )}
                                             </div>
                                             <div>
-                                                <h3 className="font-semibold text-lg">{ledger.name}</h3>
-                                                <p className="text-sm text-muted-foreground">
+                                                <h3 className="font-semibold">{ledger.name}</h3>
+                                                <p className="text-xs text-muted-foreground">
                                                     {isLendingsLedger
                                                         ? 'Telegram-linked lending tracker'
                                                         : `${ledger.categories?.length || 0} categories · ${ledger.payment_modes?.length || 0} modes`
@@ -133,7 +124,7 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                                                 </p>
                                             </div>
                                         </div>
-                                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                                     </CardContent>
                                 </Card>
                             );
@@ -142,9 +133,9 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                         {/* Telegram Link Section */}
                         <div className="pt-6 pb-4">
                             <div className="flex items-center gap-2 mb-4">
-                                <div className="h-px flex-1 bg-border/50" />
+                                <div className="h-px flex-1 bg-border" />
                                 <span className="text-xs text-muted-foreground uppercase tracking-wide">Quick Add via Telegram</span>
-                                <div className="h-px flex-1 bg-border/50" />
+                                <div className="h-px flex-1 bg-border" />
                             </div>
                             <TelegramLinkCard />
                         </div>

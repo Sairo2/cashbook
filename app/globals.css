@@ -254,8 +254,8 @@ html, body {
   background: oklch(0.5 0 0 / 50%);
 }
 
-/* Focus states for accessibility */
-:focus-visible {
+/* Focus states for accessibility - exclude inputs which have their own styles */
+:focus-visible:not(input):not(textarea):not(select) {
   outline: 2px solid oklch(0.65 0.18 160);
   outline-offset: 2px;
 }

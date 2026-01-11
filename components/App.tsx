@@ -4,10 +4,13 @@ import * as React from 'react';
 import { Ledger } from '@/lib/supabase';
 import { LedgerList } from './LedgerList';
 import { LedgerDashboard } from './LedgerDashboard';
+import { LendingsDashboard } from './LendingsDashboard';
 import { LoginPage } from './LoginPage';
 import { useSession, signOut } from '@/lib/auth-client';
 import { LogOut, User } from 'lucide-react';
 import { Button } from './ui/button';
+
+const LENDINGS_LEDGER_NAME = 'LENDINGS';
 
 export function App() {
     const { data: session, isPending } = useSession();
@@ -45,7 +48,22 @@ export function App() {
         setSelectedLedger(null);
     };
 
+    // Show appropriate dashboard based on ledger type
     if (selectedLedger) {
+        const isLendingsLedger = selectedLedger.name === LENDINGS_LEDGER_NAME;
+
+        if (isLendingsLedger) {
+            return (
+                <LendingsDashboard
+                    ledger={selectedLedger}
+                    onBack={() => setSelectedLedger(null)}
+                    userId={session.user.id}
+                    onLedgerUpdated={handleLedgerUpdated}
+                    onLedgerDeleted={handleLedgerDeleted}
+                />
+            );
+        }
+
         return (
             <LedgerDashboard
                 ledger={selectedLedger}

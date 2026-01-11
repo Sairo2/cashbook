@@ -201,72 +201,135 @@ export async function getOrCreateLendingsLedger(userId: string): Promise<Ledger 
 
 // ============ MESSAGE PARSING ============
 
+export type LendingIntent = 'lent' | 'repaid' | 'received' | 'borrowed';
+
 export interface ParsedLending {
     amount: number;
-    borrowerName: string;
+    personName: string;
     dueDate?: Date;
-    isRepayment: boolean;
+    intent: LendingIntent;
     rawDueText?: string;
 }
 
 /**
  * Parse a lending message from Telegram
- * Expected formats:
- * - "500 john 15jan" (lent 500 to john, due 15 jan)
- * - "500 john tomorrow" 
- * - "500 john next week"
- * - "received 500 john" (john returned 500)
+ * Supported formats:
+ * - "gave john 500 tomorrow" → Lent (they owe you)
+ * - "gave john 500" → Lent (they owe you)
+ * - "lent john 500" → Lent (they owe you)
+ * - "got john 500" → Received repayment (they owed you)
+ * - "received john 500" → Received repayment
+ * - "borrowed john 500" → Borrowed (you owe them)
+ * - "repaid john 500" → Repaid your debt
  */
 export function parseLendingMessage(message: string): ParsedLending | null {
     const text = message.trim().toLowerCase();
+    const parts = text.split(/\s+/);
 
-    // Check if it's a repayment
-    const isRepayment = text.startsWith('received') || text.startsWith('got') || text.startsWith('returned');
-
-    // Remove repayment keywords
-    const cleanText = text
-        .replace(/^(received|got|returned)\s+/i, '')
-        .trim();
-
-    // Parse: amount name [due_date]
-    // Examples: "500 john tomorrow", "1000 mary 15jan", "500 john"
-    const parts = cleanText.split(/\s+/);
-
-    if (parts.length < 2) {
+    if (parts.length < 3) {
         return null;
     }
 
-    // First part should be amount
-    const amount = parseAmount(parts[0]);
-    if (!amount) return null;
+    const keyword = parts[0];
+    let intent: LendingIntent;
 
-    // Second part is the name
-    const borrowerName = capitalizeFirst(parts[1]);
+    // Determine intent from keyword
+    switch (keyword) {
+        case 'gave':
+        case 'lent':
+        case 'give':
+        case 'lend':
+            intent = 'lent';
+            break;
+        case 'got':
+        case 'received':
+        case 'get':
+            intent = 'received';
+            break;
+        case 'borrowed':
+        case 'borrow':
+            intent = 'borrowed';
+            break;
+        case 'repaid':
+        case 'repay':
+        case 'paid':
+            intent = 'repaid';
+            break;
+        default:
+            // Legacy format: "500 john tomorrow" → treat as lent
+            const amount = parseAmount(parts[0]);
+            if (amount) {
+                const personName = capitalizeFirst(parts[1]);
+                let dueDate: Date | undefined;
+                let rawDueText: string | undefined;
+
+                if (parts.length > 2) {
+                    rawDueText = parts.slice(2).join(' ');
+                    dueDate = parseDueDate(rawDueText);
+                }
+
+                return {
+                    amount,
+                    personName,
+                    dueDate,
+                    intent: 'lent',
+                    rawDueText,
+                };
+            }
+            return null;
+    }
+
+    // Format: keyword person amount [due_date]
+    // e.g., "gave john 500 tomorrow"
+    const personName = capitalizeFirst(parts[1]);
+    const amount = parseAmount(parts[2]);
+
+    if (!amount) return null;
 
     // Remaining parts are the due date (optional)
     let dueDate: Date | undefined;
     let rawDueText: string | undefined;
 
-    if (parts.length > 2) {
-        rawDueText = parts.slice(2).join(' ');
+    if (parts.length > 3) {
+        rawDueText = parts.slice(3).join(' ');
         dueDate = parseDueDate(rawDueText);
     }
 
     return {
         amount,
-        borrowerName,
+        personName,
         dueDate,
-        isRepayment,
+        intent,
         rawDueText,
     };
 }
 
 /**
  * Parse amount from string (handles various formats)
+ * Supports: 500, 10k, 10K, 1.5k, ₹500, Rs500, Rs.500, 10,000
  */
 function parseAmount(amountStr: string): number | null {
     // Remove currency symbols and commas
-    const cleaned = amountStr.replace(/[₹$,rs]/gi, '').trim();
+    let cleaned = amountStr.replace(/[₹$,rs.]/gi, '').trim();
+
+    // Handle 'k' suffix for thousands (10k = 10000, 1.5k = 1500)
+    const kMatch = cleaned.match(/^([\d.]+)k$/i);
+    if (kMatch) {
+        const num = parseFloat(kMatch[1]);
+        if (!isNaN(num) && num > 0) {
+            return num * 1000;
+        }
+    }
+
+    // Handle 'L' or 'lac' suffix for lakhs (1L = 100000)
+    const lacMatch = cleaned.match(/^([\d.]+)(l|lac|lakh)$/i);
+    if (lacMatch) {
+        const num = parseFloat(lacMatch[1]);
+        if (!isNaN(num) && num > 0) {
+            return num * 100000;
+        }
+    }
+
     const amount = parseFloat(cleaned);
 
     if (isNaN(amount) || amount <= 0) return null;
@@ -377,16 +440,48 @@ export async function createLendingFromMessage(
             return { success: false, message: 'Failed to access LENDINGS ledger.' };
         }
 
+        // Determine transaction details based on intent
+        const intentConfig = {
+            lent: {
+                type: 'cash_out' as const,
+                titlePrefix: 'Lent to',
+                category: 'Lending',
+                emoji: '💸',
+                verb: 'Lent',
+            },
+            repaid: {
+                type: 'cash_out' as const,
+                titlePrefix: 'Repaid to',
+                category: 'Repayment',
+                emoji: '✅',
+                verb: 'Repaid',
+            },
+            received: {
+                type: 'cash_in' as const,
+                titlePrefix: 'Received from',
+                category: 'Repayment',
+                emoji: '💰',
+                verb: 'Received from',
+            },
+            borrowed: {
+                type: 'cash_in' as const,
+                titlePrefix: 'Borrowed from',
+                category: 'Borrowing',
+                emoji: '🔄',
+                verb: 'Borrowed from',
+            },
+        };
+
+        const config = intentConfig[parsed.intent];
+
         // Create the transaction
         const transaction = await createTransaction({
-            title: parsed.isRepayment
-                ? `Received from ${parsed.borrowerName}`
-                : `Lent to ${parsed.borrowerName}`,
+            title: `${config.titlePrefix} ${parsed.personName}`,
             amount: parsed.amount,
-            type: parsed.isRepayment ? 'cash_in' : 'cash_out',
-            category: parsed.isRepayment ? 'Repayment' : 'Lending',
+            type: config.type,
+            category: config.category,
             payment_mode: 'Cash',
-            person: parsed.borrowerName,
+            person: parsed.personName,
             ledger_id: ledger.id,
         });
 
@@ -394,13 +489,13 @@ export async function createLendingFromMessage(
             return { success: false, message: 'Failed to create transaction.' };
         }
 
-        // Create lending record for tracking
-        if (!parsed.isRepayment) {
+        // Create lending record for tracking (for lent and borrowed)
+        if (parsed.intent === 'lent' || parsed.intent === 'borrowed') {
             const { error } = await supabase
                 .from('lendings')
                 .insert([{
                     transaction_id: transaction.id,
-                    borrower_name: parsed.borrowerName,
+                    borrower_name: parsed.personName,
                     due_date: parsed.dueDate?.toISOString(),
                     status: 'pending',
                     original_amount: parsed.amount,
@@ -415,11 +510,9 @@ export async function createLendingFromMessage(
 
         // Format success message
         const amountStr = `₹${parsed.amount.toLocaleString('en-IN')}`;
-        let successMsg = parsed.isRepayment
-            ? `✅ Recorded: Received ${amountStr} from ${parsed.borrowerName}`
-            : `✅ Recorded: Lent ${amountStr} to ${parsed.borrowerName}`;
+        let successMsg = `${config.emoji} Recorded: ${config.verb} ${amountStr} ${parsed.intent === 'lent' || parsed.intent === 'repaid' ? 'to' : 'from'} ${parsed.personName}`;
 
-        if (!parsed.isRepayment && parsed.dueDate) {
+        if ((parsed.intent === 'lent' || parsed.intent === 'borrowed') && parsed.dueDate) {
             const dueDateStr = parsed.dueDate.toLocaleDateString('en-IN', {
                 day: 'numeric',
                 month: 'short',
@@ -473,14 +566,19 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
 export function getHelpMessage(): string {
     return `📒 <b>CashBook LENDINGS Bot</b>
 
-<b>How to record a lending:</b>
-<code>500 john tomorrow</code>
-<code>1000 mary 15jan</code>
-<code>2000 rahul next week</code>
+<b>💸 When you GIVE money:</b>
+<code>gave john 500 tomorrow</code>
+<code>lent mary 1000 15jan</code>
 
-<b>How to record a repayment:</b>
-<code>received 500 john</code>
-<code>got 1000 mary</code>
+<b>💰 When you GET money back:</b>
+<code>got john 500</code>
+<code>received mary 1000</code>
+
+<b>🔄 When you BORROW money:</b>
+<code>borrowed john 2000</code>
+
+<b>✅ When you REPAY your debt:</b>
+<code>repaid john 500</code>
 
 <b>Commands:</b>
 /help - Show this message

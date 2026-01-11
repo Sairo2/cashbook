@@ -130,8 +130,8 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                         No data available
                     </div>
                 ) : (
-                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[220px]">
-                        <PieChart>
+                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[250px] [&_.recharts-surface]:overflow-visible">
+                        <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                             <ChartTooltip
                                 content={
                                     <ChartTooltipContent
@@ -146,10 +146,28 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={50}
-                                outerRadius={85}
+                                innerRadius={45}
+                                outerRadius={75}
                                 paddingAngle={2}
-                                label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                    if (percent < 0.05) return null;
+                                    const RADIAN = Math.PI / 180;
+                                    const radius = outerRadius + 20;
+                                    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                    return (
+                                        <text
+                                            x={x}
+                                            y={y}
+                                            fill="currentColor"
+                                            textAnchor={x > cx ? 'start' : 'end'}
+                                            dominantBaseline="central"
+                                            className="text-xs fill-muted-foreground"
+                                        >
+                                            {`${(percent * 100).toFixed(0)}%`}
+                                        </text>
+                                    );
+                                }}
                                 labelLine={false}
                             >
                                 {data.map((entry, index) => (
@@ -245,8 +263,8 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                         <button
                             onClick={() => setChartType('pie')}
                             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'pie'
-                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
                                 }`}
                             title="Pie Chart"
                         >
@@ -256,8 +274,8 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                         <button
                             onClick={() => setChartType('bar')}
                             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'bar'
-                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
                                 }`}
                             title="Bar Chart"
                         >

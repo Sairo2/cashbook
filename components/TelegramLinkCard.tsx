@@ -125,20 +125,23 @@ export function TelegramLinkCard({ className }: TelegramLinkCardProps) {
 
     return (
         <Card className={cn(
-            "border-border/50 overflow-hidden",
-            status?.linked && "border-emerald-500/30 bg-emerald-500/5",
+            "border overflow-hidden",
+            status?.linked
+                ? "border-emerald-500/30 bg-emerald-500/5"
+                : "border-border",
             className
         )}>
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
-                    <div className={cn(
+                    {/* <div className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center",
                         status?.linked
                             ? "bg-gradient-to-br from-emerald-500 to-teal-600"
                             : "bg-gradient-to-br from-blue-500 to-indigo-600"
                     )}>
-                        <Send className="w-5 h-5 text-white" />
-                    </div>
+                        
+                    </div> */}
+                    <Send className="w-5 h-5 text-emerald-500" />
                     <div>
                         <CardTitle className="text-base">Telegram Bot</CardTitle>
                         <CardDescription className="text-xs">
@@ -163,7 +166,7 @@ export function TelegramLinkCard({ className }: TelegramLinkCardProps) {
                         </div>
 
                         <p className="text-xs text-muted-foreground">
-                            Send messages like <code className="bg-muted px-1 py-0.5 rounded text-[10px]">500 john tomorrow</code> to record lendings.
+                            Send: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">gave john 500</code> or <code className="bg-muted px-1 py-0.5 rounded text-[10px]">got john 500</code>
                         </p>
 
                         <Button
@@ -240,8 +243,8 @@ export function TelegramLinkCard({ className }: TelegramLinkCardProps) {
                             Link your Telegram account to quickly record lendings by sending messages like:
                         </p>
                         <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                            <code className="text-xs block">500 john tomorrow</code>
-                            <code className="text-xs block text-muted-foreground">received 500 john</code>
+                            <code className="text-xs block">gave john 500 tomorrow</code>
+                            <code className="text-xs block text-muted-foreground">got mary 1000</code>
                         </div>
 
                         <Button
