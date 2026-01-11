@@ -1,12 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { Book, Plus, ChevronRight, Wallet } from 'lucide-react';
+import { Book, Plus, ChevronRight, Wallet, Send } from 'lucide-react';
 import { Ledger, DEFAULT_CATEGORIES, DEFAULT_PAYMENT_MODES } from '@/lib/supabase';
 import { getLedgers, createLedger } from '@/lib/store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { AddLedgerDialog } from './AddLedgerDialog';
+import { TelegramLinkCard } from './TelegramLinkCard';
+
+const LENDINGS_LEDGER_NAME = 'LENDINGS';
 
 interface LedgerListProps {
     onSelectLedger: (ledger: Ledger) => void;
@@ -97,29 +100,54 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                     </div>
                 ) : (
                     <>
-                        {ledgers.map((ledger, index) => (
-                            <Card
-                                key={ledger.id}
-                                className="glass-card border-none cursor-pointer hover:bg-accent/10 transition-all active:scale-[0.98] animate-slide-up"
-                                style={{ animationDelay: `${index * 50}ms` }}
-                                onClick={() => onSelectLedger(ledger)}
-                            >
-                                <CardContent className="p-4 flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 rounded-xl bg-primary/10">
-                                            <Book className="h-6 w-6 text-primary" />
+                        {ledgers.map((ledger, index) => {
+                            const isLendingsLedger = ledger.name === LENDINGS_LEDGER_NAME;
+
+                            return (
+                                <Card
+                                    key={ledger.id}
+                                    className={`glass-card border-none cursor-pointer hover:bg-accent/10 transition-all active:scale-[0.98] animate-slide-up ${isLendingsLedger ? 'border border-emerald-500/30 bg-emerald-500/5' : ''
+                                        }`}
+                                    style={{ animationDelay: `${index * 50}ms` }}
+                                    onClick={() => onSelectLedger(ledger)}
+                                >
+                                    <CardContent className="p-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`p-3 rounded-xl ${isLendingsLedger
+                                                    ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                                                    : 'bg-primary/10'
+                                                }`}>
+                                                {isLendingsLedger ? (
+                                                    <Send className="h-6 w-6 text-white" />
+                                                ) : (
+                                                    <Book className="h-6 w-6 text-primary" />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-lg">{ledger.name}</h3>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {isLendingsLedger
+                                                        ? 'Telegram-linked lending tracker'
+                                                        : `${ledger.categories?.length || 0} categories · ${ledger.payment_modes?.length || 0} modes`
+                                                    }
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-lg">{ledger.name}</h3>
-                                            <p className="text-sm text-muted-foreground">
-                                                {ledger.categories?.length || 0} categories · {ledger.payment_modes?.length || 0} modes
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
+
+                        {/* Telegram Link Section */}
+                        <div className="pt-6 pb-4">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="h-px flex-1 bg-border/50" />
+                                <span className="text-xs text-muted-foreground uppercase tracking-wide">Quick Add via Telegram</span>
+                                <div className="h-px flex-1 bg-border/50" />
+                            </div>
+                            <TelegramLinkCard />
+                        </div>
                     </>
                 )}
             </div>
