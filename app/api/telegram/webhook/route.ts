@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
         const { message } = update;
         const chatId = message.chat.id.toString();
-        const text = message.text.trim();
+        const text = message.text!.trim(); // Safe: we checked above
         const username = message.from.username;
 
         // Handle /start command (with optional link code)
