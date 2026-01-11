@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { createLedger, getLedgers, createTransaction } from './store';
+import { Ledger } from './supabase';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -179,20 +180,23 @@ export async function unlinkTelegramAccount(userId: string): Promise<boolean> {
 /**
  * Get or create the LENDINGS ledger for a user
  */
-export async function getOrCreateLendingsLedger(userId: string) {
+export async function getOrCreateLendingsLedger(userId: string): Promise<Ledger | null> {
     const ledgers = await getLedgers(userId);
-    let lendingsLedger = ledgers.find(l => l.name === LENDINGS_LEDGER_NAME);
+    const existingLedger = ledgers.find(l => l.name === LENDINGS_LEDGER_NAME);
 
-    if (!lendingsLedger) {
-        lendingsLedger = await createLedger(
-            LENDINGS_LEDGER_NAME,
-            LENDINGS_CATEGORIES,
-            LENDINGS_PAYMENT_MODES,
-            userId
-        );
+    if (existingLedger) {
+        return existingLedger;
     }
 
-    return lendingsLedger;
+    // Create new LENDINGS ledger
+    const newLedger = await createLedger(
+        LENDINGS_LEDGER_NAME,
+        LENDINGS_CATEGORIES,
+        LENDINGS_PAYMENT_MODES,
+        userId
+    );
+
+    return newLedger;
 }
 
 // ============ MESSAGE PARSING ============
