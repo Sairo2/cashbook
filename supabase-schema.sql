@@ -39,6 +39,47 @@ CREATE INDEX IF NOT EXISTS idx_transactions_ledger_id ON transactions(ledger_id)
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
 
 -- ============================================
+-- TELEGRAM + LENDINGS TABLES
+-- ============================================
+CREATE TABLE IF NOT EXISTS telegram_links (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    telegram_chat_id TEXT NOT NULL,
+    telegram_username TEXT,
+    linked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_links_user_id ON telegram_links(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_links_chat_id ON telegram_links(telegram_chat_id);
+
+CREATE TABLE IF NOT EXISTS telegram_link_codes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    code TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_link_codes_code ON telegram_link_codes(code);
+CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_user_id ON telegram_link_codes(user_id);
+CREATE INDEX IF NOT EXISTS idx_telegram_link_codes_expires_at ON telegram_link_codes(expires_at);
+
+CREATE TABLE IF NOT EXISTS lendings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    borrower_name TEXT NOT NULL,
+    due_date TIMESTAMP WITH TIME ZONE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'partial', 'settled')),
+    original_amount DECIMAL(12,2) NOT NULL,
+    remaining_amount DECIMAL(12,2) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lendings_transaction_id ON lendings(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_lendings_status ON lendings(status);
+
+-- ============================================
 -- BETTER AUTH TABLES
 -- ============================================
 -- These are automatically created by Better Auth, 
@@ -90,6 +131,9 @@ CREATE INDEX IF NOT EXISTS idx_account_user_id ON "account"(user_id);
 -- Enable RLS on tables
 ALTER TABLE ledgers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telegram_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telegram_link_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lendings ENABLE ROW LEVEL SECURITY;
 
 -- Policies for ledgers (users can only see their own ledgers)
 CREATE POLICY "Users can view own ledgers" ON ledgers
@@ -117,6 +161,43 @@ CREATE POLICY "Users can update transactions" ON transactions
 CREATE POLICY "Users can delete transactions" ON transactions
     FOR DELETE USING (true);
 
+-- Policies for Telegram and lending tables
+CREATE POLICY "Users can view telegram links" ON telegram_links
+    FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert telegram links" ON telegram_links
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can update telegram links" ON telegram_links
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Users can delete telegram links" ON telegram_links
+    FOR DELETE USING (true);
+
+CREATE POLICY "Users can view telegram link codes" ON telegram_link_codes
+    FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert telegram link codes" ON telegram_link_codes
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can update telegram link codes" ON telegram_link_codes
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Users can delete telegram link codes" ON telegram_link_codes
+    FOR DELETE USING (true);
+
+CREATE POLICY "Users can view lendings" ON lendings
+    FOR SELECT USING (true);
+
+CREATE POLICY "Users can insert lendings" ON lendings
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users can update lendings" ON lendings
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Users can delete lendings" ON lendings
+    FOR DELETE USING (true);
+
 -- ============================================
 -- DONE!
 -- ============================================
@@ -126,3 +207,6 @@ CREATE POLICY "Users can delete transactions" ON transactions
 -- 3. user - Stores authenticated users (Better Auth)
 -- 4. session - Stores user sessions (Better Auth)
 -- 5. account - Stores OAuth accounts (Better Auth)
+-- 6. telegram_links - Stores linked Telegram accounts
+-- 7. telegram_link_codes - Stores short-lived linking codes
+-- 8. lendings - Stores extra lending metadata

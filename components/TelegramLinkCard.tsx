@@ -14,22 +14,51 @@ interface TelegramLinkStatus {
 
 interface TelegramLinkCardProps {
     className?: string;
+    onLinked?: () => void;
 }
 
-export function TelegramLinkCard({ className }: TelegramLinkCardProps) {
+export function TelegramLinkCard({ className, onLinked }: TelegramLinkCardProps) {
     const [status, setStatus] = React.useState<TelegramLinkStatus | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [linkCode, setLinkCode] = React.useState<string | null>(null);
     const [codeExpiry, setCodeExpiry] = React.useState<number>(0);
     const [copied, setCopied] = React.useState(false);
     const [actionLoading, setActionLoading] = React.useState(false);
+    const wasLinkedRef = React.useRef(false);
 
     const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'YourCashbookBot';
+
+    const fetchLinkStatus = React.useCallback(async () => {
+        try {
+            const response = await fetch('/api/telegram/link');
+            if (response.ok) {
+                const data = await response.json();
+                const isLinked = !!data.linked;
+
+                setStatus(data);
+
+                if (isLinked) {
+                    setLinkCode(null);
+                    setCodeExpiry(0);
+
+                    if (!wasLinkedRef.current) {
+                        onLinked?.();
+                    }
+                }
+
+                wasLinkedRef.current = isLinked;
+            }
+        } catch (error) {
+            console.error('Error fetching Telegram link status:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [onLinked]);
 
     // Fetch link status on mount
     React.useEffect(() => {
         fetchLinkStatus();
-    }, []);
+    }, [fetchLinkStatus]);
 
     // Countdown timer for code expiry
     React.useEffect(() => {
@@ -47,19 +76,15 @@ export function TelegramLinkCard({ className }: TelegramLinkCardProps) {
         }
     }, [codeExpiry]);
 
-    const fetchLinkStatus = async () => {
-        try {
-            const response = await fetch('/api/telegram/link');
-            if (response.ok) {
-                const data = await response.json();
-                setStatus(data);
-            }
-        } catch (error) {
-            console.error('Error fetching Telegram link status:', error);
-        } finally {
-            setLoading(false);
+    // While a link code is active, watch for Telegram completing the link.
+    React.useEffect(() => {
+        if (!linkCode || status?.linked) {
+            return;
         }
-    };
+
+        const timer = setInterval(fetchLinkStatus, 3000);
+        return () => clearInterval(timer);
+    }, [fetchLinkStatus, linkCode, status?.linked]);
 
     const generateLinkCode = async () => {
         setActionLoading(true);

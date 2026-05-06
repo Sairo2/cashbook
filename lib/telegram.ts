@@ -2,8 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { createLedger, getLedgers, createTransaction } from './store';
 import { Ledger } from './supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
@@ -41,6 +41,38 @@ export interface Lending {
     remaining_amount: number;
     notes?: string;
     created_at: string;
+}
+
+async function migrateUserLedgers(oldUserId: string, newUserId: string): Promise<number | null> {
+    if (oldUserId === newUserId) {
+        return 0;
+    }
+
+    const { data: oldLedgers, error: findError } = await supabase
+        .from('ledgers')
+        .select('id')
+        .eq('user_id', oldUserId);
+
+    if (findError) {
+        console.error('Error finding ledgers to migrate:', findError);
+        return null;
+    }
+
+    if (!oldLedgers?.length) {
+        return 0;
+    }
+
+    const { error: updateError } = await supabase
+        .from('ledgers')
+        .update({ user_id: newUserId })
+        .eq('user_id', oldUserId);
+
+    if (updateError) {
+        console.error('Error migrating ledgers to re-linked user:', updateError);
+        return null;
+    }
+
+    return oldLedgers.length;
 }
 
 /**
@@ -101,22 +133,61 @@ export async function verifyAndLinkAccount(
         return { success: false, message: 'Code expired. Please generate a new one from the app.' };
     }
 
-    // Check if this Telegram account is already linked
-    const { data: existingLink } = await supabase
+    const targetUserId = codeData.user_id;
+
+    // Check if this Telegram account is already linked. If it is, treat this as
+    // account recovery/reconnect because the request came from that Telegram chat.
+    const { data: existingLink, error: existingLinkError } = await supabase
         .from('telegram_links')
         .select('*')
         .eq('telegram_chat_id', telegramChatId)
-        .single();
+        .maybeSingle();
+
+    if (existingLinkError) {
+        console.error('Error checking existing Telegram link:', existingLinkError);
+        return { success: false, message: 'Failed to check Telegram link. Please try again.' };
+    }
 
     if (existingLink) {
-        return { success: false, message: 'This Telegram account is already linked to another user.' };
+        const oldUserId = existingLink.user_id;
+
+        const migratedLedgerCount = await migrateUserLedgers(oldUserId, targetUserId);
+        if (migratedLedgerCount === null) {
+            return { success: false, message: 'Telegram is linked, but your old ledgers could not be restored. Please try again.' };
+        }
+
+        const { error: relinkError } = await supabase
+            .from('telegram_links')
+            .update({
+                user_id: targetUserId,
+                telegram_username: telegramUsername ?? existingLink.telegram_username,
+                linked_at: new Date().toISOString(),
+            })
+            .eq('id', existingLink.id);
+
+        if (relinkError) {
+            console.error('Error re-linking Telegram account:', relinkError);
+            return { success: false, message: 'Failed to re-link account. Please try again.' };
+        }
+
+        await supabase.from('telegram_link_codes').delete().eq('id', codeData.id);
+        await getOrCreateLendingsLedger(targetUserId);
+
+        if (oldUserId === targetUserId) {
+            return { success: true, message: '✅ Telegram is already linked to this account. Your LENDINGS ledger is ready.' };
+        }
+
+        return {
+            success: true,
+            message: `✅ Telegram re-linked successfully! Restored ${migratedLedgerCount} old ledger${migratedLedgerCount === 1 ? '' : 's'} to your web app.`,
+        };
     }
 
     // Create the link
     const { error: linkError } = await supabase
         .from('telegram_links')
         .insert([{
-            user_id: codeData.user_id,
+            user_id: targetUserId,
             telegram_chat_id: telegramChatId,
             telegram_username: telegramUsername,
         }]);
@@ -130,7 +201,7 @@ export async function verifyAndLinkAccount(
     await supabase.from('telegram_link_codes').delete().eq('id', codeData.id);
 
     // Create LENDINGS ledger for the user if it doesn't exist
-    await getOrCreateLendingsLedger(codeData.user_id);
+    await getOrCreateLendingsLedger(targetUserId);
 
     return { success: true, message: '✅ Account linked successfully! You can now send lending entries.' };
 }
@@ -310,7 +381,7 @@ export function parseLendingMessage(message: string): ParsedLending | null {
  */
 function parseAmount(amountStr: string): number | null {
     // Remove currency symbols and commas
-    let cleaned = amountStr.replace(/[₹$,rs.]/gi, '').trim();
+    const cleaned = amountStr.replace(/[₹$,rs.]/gi, '').trim();
 
     // Handle 'k' suffix for thousands (10k = 10000, 1.5k = 1500)
     const kMatch = cleaned.match(/^([\d.]+)k$/i);
