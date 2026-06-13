@@ -79,6 +79,19 @@ CREATE TABLE IF NOT EXISTS lendings (
 CREATE INDEX IF NOT EXISTS idx_lendings_transaction_id ON lendings(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_lendings_status ON lendings(status);
 
+CREATE TABLE IF NOT EXISTS lending_contacts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    ledger_id UUID NOT NULL REFERENCES ledgers(id) ON DELETE CASCADE,
+    person_name TEXT NOT NULL,
+    phone_number TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (user_id, ledger_id, person_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lending_contacts_user_ledger ON lending_contacts(user_id, ledger_id);
+
 -- ============================================
 -- BETTER AUTH TABLES
 -- ============================================
@@ -134,69 +147,184 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_link_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lendings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lending_contacts ENABLE ROW LEVEL SECURITY;
+
+-- IMPORTANT:
+-- These owner-scoped policies assume Supabase can identify the current user via
+-- auth.uid() (Supabase Auth/JWT) or that writes happen through a trusted server
+-- role. This app currently uses Better Auth, so direct browser access with only
+-- the anon key will not satisfy these policies until Supabase receives a
+-- user-scoped JWT or data access is moved behind authenticated server routes.
 
 -- Policies for ledgers (users can only see their own ledgers)
+DROP POLICY IF EXISTS "Users can view own ledgers" ON ledgers;
 CREATE POLICY "Users can view own ledgers" ON ledgers
-    FOR SELECT USING (true);
+    FOR SELECT USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can insert own ledgers" ON ledgers;
 CREATE POLICY "Users can insert own ledgers" ON ledgers
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can update own ledgers" ON ledgers;
 CREATE POLICY "Users can update own ledgers" ON ledgers
-    FOR UPDATE USING (true);
+    FOR UPDATE USING (user_id = auth.uid()::text)
+    WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can delete own ledgers" ON ledgers;
 CREATE POLICY "Users can delete own ledgers" ON ledgers
-    FOR DELETE USING (true);
+    FOR DELETE USING (user_id = auth.uid()::text);
 
 -- Policies for transactions
+DROP POLICY IF EXISTS "Users can view transactions" ON transactions;
 CREATE POLICY "Users can view transactions" ON transactions
-    FOR SELECT USING (true);
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM ledgers
+            WHERE ledgers.id = transactions.ledger_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can insert transactions" ON transactions;
 CREATE POLICY "Users can insert transactions" ON transactions
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM ledgers
+            WHERE ledgers.id = transactions.ledger_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can update transactions" ON transactions;
 CREATE POLICY "Users can update transactions" ON transactions
-    FOR UPDATE USING (true);
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM ledgers
+            WHERE ledgers.id = transactions.ledger_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM ledgers
+            WHERE ledgers.id = transactions.ledger_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can delete transactions" ON transactions;
 CREATE POLICY "Users can delete transactions" ON transactions
-    FOR DELETE USING (true);
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM ledgers
+            WHERE ledgers.id = transactions.ledger_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
 -- Policies for Telegram and lending tables
+DROP POLICY IF EXISTS "Users can view telegram links" ON telegram_links;
 CREATE POLICY "Users can view telegram links" ON telegram_links
-    FOR SELECT USING (true);
+    FOR SELECT USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can insert telegram links" ON telegram_links;
 CREATE POLICY "Users can insert telegram links" ON telegram_links
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can update telegram links" ON telegram_links;
 CREATE POLICY "Users can update telegram links" ON telegram_links
-    FOR UPDATE USING (true);
+    FOR UPDATE USING (user_id = auth.uid()::text)
+    WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can delete telegram links" ON telegram_links;
 CREATE POLICY "Users can delete telegram links" ON telegram_links
-    FOR DELETE USING (true);
+    FOR DELETE USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can view telegram link codes" ON telegram_link_codes;
 CREATE POLICY "Users can view telegram link codes" ON telegram_link_codes
-    FOR SELECT USING (true);
+    FOR SELECT USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can insert telegram link codes" ON telegram_link_codes;
 CREATE POLICY "Users can insert telegram link codes" ON telegram_link_codes
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can update telegram link codes" ON telegram_link_codes;
 CREATE POLICY "Users can update telegram link codes" ON telegram_link_codes
-    FOR UPDATE USING (true);
+    FOR UPDATE USING (user_id = auth.uid()::text)
+    WITH CHECK (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can delete telegram link codes" ON telegram_link_codes;
 CREATE POLICY "Users can delete telegram link codes" ON telegram_link_codes
-    FOR DELETE USING (true);
+    FOR DELETE USING (user_id = auth.uid()::text);
 
+DROP POLICY IF EXISTS "Users can view lendings" ON lendings;
 CREATE POLICY "Users can view lendings" ON lendings
-    FOR SELECT USING (true);
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM transactions
+            JOIN ledgers ON ledgers.id = transactions.ledger_id
+            WHERE transactions.id = lendings.transaction_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can insert lendings" ON lendings;
 CREATE POLICY "Users can insert lendings" ON lendings
-    FOR INSERT WITH CHECK (true);
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM transactions
+            JOIN ledgers ON ledgers.id = transactions.ledger_id
+            WHERE transactions.id = lendings.transaction_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can update lendings" ON lendings;
 CREATE POLICY "Users can update lendings" ON lendings
-    FOR UPDATE USING (true);
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM transactions
+            JOIN ledgers ON ledgers.id = transactions.ledger_id
+            WHERE transactions.id = lendings.transaction_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM transactions
+            JOIN ledgers ON ledgers.id = transactions.ledger_id
+            WHERE transactions.id = lendings.transaction_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
 
+DROP POLICY IF EXISTS "Users can delete lendings" ON lendings;
 CREATE POLICY "Users can delete lendings" ON lendings
-    FOR DELETE USING (true);
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM transactions
+            JOIN ledgers ON ledgers.id = transactions.ledger_id
+            WHERE transactions.id = lendings.transaction_id
+            AND ledgers.user_id = auth.uid()::text
+        )
+    );
+
+DROP POLICY IF EXISTS "Users can view lending contacts" ON lending_contacts;
+CREATE POLICY "Users can view lending contacts" ON lending_contacts
+    FOR SELECT USING (user_id = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Users can insert lending contacts" ON lending_contacts;
+CREATE POLICY "Users can insert lending contacts" ON lending_contacts
+    FOR INSERT WITH CHECK (user_id = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Users can update lending contacts" ON lending_contacts;
+CREATE POLICY "Users can update lending contacts" ON lending_contacts
+    FOR UPDATE USING (user_id = auth.uid()::text)
+    WITH CHECK (user_id = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Users can delete lending contacts" ON lending_contacts;
+CREATE POLICY "Users can delete lending contacts" ON lending_contacts
+    FOR DELETE USING (user_id = auth.uid()::text);
 
 -- ============================================
 -- DONE!
@@ -210,3 +338,4 @@ CREATE POLICY "Users can delete lendings" ON lendings
 -- 6. telegram_links - Stores linked Telegram accounts
 -- 7. telegram_link_codes - Stores short-lived linking codes
 -- 8. lendings - Stores extra lending metadata
+-- 9. lending_contacts - Stores saved phone numbers for lending reminders

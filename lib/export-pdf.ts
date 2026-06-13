@@ -47,7 +47,10 @@ export function exportLedgerToPDF(ledger: Ledger, transactions: Transaction[]) {
 
     // Helper function for formatting numbers (safe for PDF)
     const formatAmount = (amount: number): string => {
-        return Math.abs(amount).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return Math.abs(amount).toLocaleString('en-IN', {
+            minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+            maximumFractionDigits: 2,
+        });
     };
 
     // Balance Card

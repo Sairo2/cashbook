@@ -9,7 +9,7 @@ function getPool() {
         pool = new Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: {
-                rejectUnauthorized: false,
+                rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'false' ? false : true,
             },
             max: 5,
         });
@@ -19,7 +19,7 @@ function getPool() {
 
 export const auth = betterAuth({
     database: getPool(),
-    trustedOrigins: ["http://localhost:3000", "http://localhost:3001"],
+    trustedOrigins: ["http://localhost:3000", "http://localhost:3001", "https://cashbook-jade.vercel.app"],
     baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
     secret: process.env.BETTER_AUTH_SECRET,
     emailAndPassword: {

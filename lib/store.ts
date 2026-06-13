@@ -1,10 +1,65 @@
-import { createClient } from '@supabase/supabase-js';
-import { Ledger, Transaction } from './supabase';
+import { supabase, Ledger, LendingContact, Transaction } from './supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+function formatSupabaseError(error: unknown): string {
+    if (!error || typeof error !== 'object') {
+        return String(error);
+    }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const record = error as Record<string, unknown>;
+    return [record.message, record.details, record.hint, record.code]
+        .filter(Boolean)
+        .join(' | ') || JSON.stringify(record);
+}
+
+function getLocalLendingContacts(userId: string, ledgerId: string): LendingContact[] {
+    if (typeof window === 'undefined') {
+        return [];
+    }
+
+    try {
+        const stored = window.localStorage.getItem(`lending_contacts:${userId}:${ledgerId}`);
+        return stored ? JSON.parse(stored) as LendingContact[] : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveLocalLendingContact(
+    userId: string,
+    ledgerId: string,
+    personName: string,
+    phoneNumber: string
+): LendingContact | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+
+    const now = new Date().toISOString();
+    const key = `lending_contacts:${userId}:${ledgerId}`;
+    const existing = getLocalLendingContacts(userId, ledgerId);
+    const contact: LendingContact = {
+        id: `${ledgerId}:${personName.toLowerCase()}`,
+        user_id: userId,
+        ledger_id: ledgerId,
+        person_name: personName,
+        phone_number: phoneNumber,
+        created_at: existing.find(c => c.person_name.toLowerCase() === personName.toLowerCase())?.created_at || now,
+        updated_at: now,
+    };
+
+    const nextContacts = [
+        contact,
+        ...existing.filter(c => c.person_name.toLowerCase() !== personName.toLowerCase()),
+    ];
+
+    try {
+        window.localStorage.setItem(key, JSON.stringify(nextContacts));
+    } catch {
+        return null;
+    }
+
+    return contact;
+}
 
 // ============ LEDGER OPERATIONS ============
 
@@ -47,17 +102,7 @@ export async function createLedger(
 }
 
 export async function deleteLedger(id: string): Promise<boolean> {
-    // First delete all transactions in this ledger
-    const { error: txnError } = await supabase
-        .from('transactions')
-        .delete()
-        .eq('ledger_id', id);
-
-    if (txnError) {
-        console.error('Error deleting transactions:', txnError);
-        return false;
-    }
-
+    // Only delete the ledger — transactions are handled by ON DELETE CASCADE
     const { error } = await supabase
         .from('ledgers')
         .delete()
@@ -71,24 +116,14 @@ export async function deleteLedger(id: string): Promise<boolean> {
 }
 
 export async function updateLedger(id: string, updates: Partial<Ledger>): Promise<Ledger | null> {
-    // First get the existing ledger
-    const existing = await getLedgerById(id);
-    if (!existing) {
-        console.error('Ledger not found');
-        return null;
-    }
-
-    // Use upsert to update (works around some CORS/RLS issues)
     const { data, error } = await supabase
         .from('ledgers')
-        .upsert({
-            id: existing.id,
-            user_id: existing.user_id,
-            created_at: existing.created_at,
-            name: updates.name ?? existing.name,
-            categories: updates.categories ?? existing.categories,
-            payment_modes: updates.payment_modes ?? existing.payment_modes,
+        .update({
+            ...(updates.name !== undefined && { name: updates.name }),
+            ...(updates.categories !== undefined && { categories: updates.categories }),
+            ...(updates.payment_modes !== undefined && { payment_modes: updates.payment_modes }),
         })
+        .eq('id', id)
         .select()
         .single();
 
@@ -176,27 +211,17 @@ export async function updateTransaction(
     id: string,
     updates: Partial<Transaction>
 ): Promise<Transaction | null> {
-    // First get the existing transaction
-    const existing = await getTransactionById(id);
-    if (!existing) {
-        console.error('Transaction not found');
-        return null;
-    }
-
-    // Use upsert to update (works around some CORS/RLS issues)
     const { data, error } = await supabase
         .from('transactions')
-        .upsert({
-            id: existing.id,
-            ledger_id: existing.ledger_id,
-            created_at: existing.created_at,
-            title: updates.title ?? existing.title,
-            amount: updates.amount ?? existing.amount,
-            type: updates.type ?? existing.type,
-            category: updates.category ?? existing.category,
-            payment_mode: updates.payment_mode ?? existing.payment_mode,
-            person: updates.person ?? existing.person,
+        .update({
+            ...(updates.title !== undefined && { title: updates.title }),
+            ...(updates.amount !== undefined && { amount: updates.amount }),
+            ...(updates.type !== undefined && { type: updates.type }),
+            ...(updates.category !== undefined && { category: updates.category }),
+            ...(updates.payment_mode !== undefined && { payment_mode: updates.payment_mode }),
+            ...(updates.person !== undefined && { person: updates.person }),
         })
+        .eq('id', id)
         .select()
         .single();
 
@@ -204,5 +229,53 @@ export async function updateTransaction(
         console.error('Error updating transaction:', error);
         return null;
     }
+    return data;
+}
+
+// ============ LENDING CONTACT OPERATIONS ============
+
+export async function getLendingContacts(
+    userId: string,
+    ledgerId: string
+): Promise<LendingContact[]> {
+    const { data, error } = await supabase
+        .from('lending_contacts')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('ledger_id', ledgerId);
+
+    if (error) {
+        console.warn('Lending contacts unavailable, using local fallback:', formatSupabaseError(error));
+        return getLocalLendingContacts(userId, ledgerId);
+    }
+
+    return data || [];
+}
+
+export async function upsertLendingContact(
+    userId: string,
+    ledgerId: string,
+    personName: string,
+    phoneNumber: string
+): Promise<LendingContact | null> {
+    const { data, error } = await supabase
+        .from('lending_contacts')
+        .upsert({
+            user_id: userId,
+            ledger_id: ledgerId,
+            person_name: personName,
+            phone_number: phoneNumber,
+            updated_at: new Date().toISOString(),
+        }, {
+            onConflict: 'user_id,ledger_id,person_name',
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.warn('Could not save lending contact to Supabase, using local fallback:', formatSupabaseError(error));
+        return saveLocalLendingContact(userId, ledgerId, personName, phoneNumber);
+    }
+
     return data;
 }

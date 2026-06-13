@@ -3,38 +3,40 @@
 import * as React from 'react';
 import { Pie, PieChart, Bar, BarChart, XAxis, YAxis, Cell } from 'recharts';
 import { Transaction } from '@/lib/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { PieChartIcon, BarChart3 } from 'lucide-react';
 
 interface SummaryChartsProps {
     transactions: Transaction[];
 }
 
+// Pastel chart colors for light theme
 const CHART_COLORS = [
-    'hsl(160, 60%, 45%)',   // emerald
-    'hsl(280, 60%, 55%)',   // purple
-    'hsl(45, 80%, 55%)',    // amber
-    'hsl(210, 70%, 50%)',   // blue
-    'hsl(180, 50%, 45%)',   // teal
-    'hsl(330, 60%, 55%)',   // pink
-    'hsl(0, 65%, 55%)',     // rose
-    'hsl(260, 60%, 45%)',   // indigo
-    'hsl(90, 50%, 50%)',    // lime
-    'hsl(25, 80%, 55%)',    // orange
+    '#4A9D7E',   // sage green (primary)
+    '#7C6DC7',   // soft purple
+    '#D4A843',   // warm amber
+    '#4A8DB7',   // soft blue
+    '#5BA69E',   // teal
+    '#D4738E',   // soft pink
+    '#E87461',   // coral (destructive)
+    '#5B6DC7',   // indigo
+    '#7DB85A',   // lime green
+    '#D48843',   // soft orange
 ];
 
 export function SummaryCharts({ transactions }: SummaryChartsProps) {
     const [chartType, setChartType] = React.useState<'pie' | 'bar'>('pie');
 
-    // Only consider cash_out for expense analysis
-    const expenses = transactions.filter(t => t.type === 'cash_out');
-    const income = transactions.filter(t => t.type === 'cash_in');
-    const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
-    const totalIncome = income.reduce((sum, t) => sum + t.amount, 0);
+    // Correctly memoize arrays to prevent triggering useMemo on every render
+    const expenses = React.useMemo(() => transactions.filter(t => t.type === 'cash_out'), [transactions]);
+    const income = React.useMemo(() => transactions.filter(t => t.type === 'cash_in'), [transactions]);
+    
+    const totalExpenses = React.useMemo(() => expenses.reduce((sum, t) => sum + t.amount, 0), [expenses]);
+    const totalIncome = React.useMemo(() => income.reduce((sum, t) => sum + t.amount, 0), [income]);
 
-    // Group by category
+    // Group expenses by category
     const categoryData = React.useMemo(() => {
         const grouped: Record<string, number> = {};
         expenses.forEach(t => {
@@ -49,7 +51,7 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             .sort((a, b) => b.value - a.value);
     }, [expenses]);
 
-    // Group by person
+    // Group all by person
     const personData = React.useMemo(() => {
         const grouped: Record<string, number> = {};
         transactions.forEach(t => {
@@ -65,7 +67,7 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
             .sort((a, b) => b.value - a.value);
     }, [transactions]);
 
-    // Group by payment mode
+    // Group all by payment mode
     const paymentModeData = React.useMemo(() => {
         const grouped: Record<string, number> = {};
         transactions.forEach(t => {
@@ -110,9 +112,9 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
 
     if (transactions.length === 0) {
         return (
-            <Card className="glass-card border-none">
-                <CardContent className="py-8 text-center text-muted-foreground">
-                    <p>Add some transactions to see charts</p>
+            <Card className="surface-card border border-border rounded-2xl">
+                <CardContent className="py-12 text-center text-muted-foreground text-xs font-semibold">
+                    <p>Add transactions to populate visual summaries</p>
                 </CardContent>
             </Card>
         );
@@ -120,17 +122,16 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
 
     const renderPieChart = (data: Array<{ name: string; value: number; fill: string }>, title: string) => {
         const chartConfig = generateChartConfig(data);
-        const total = data.reduce((sum, d) => sum + d.value, 0);
 
         return (
-            <div className="space-y-3">
-                <h4 className="text-sm font-medium text-center text-muted-foreground">{title}</h4>
+            <div className="space-y-4 py-2">
+                <h4 className="text-[10px] font-bold text-center text-muted-foreground uppercase tracking-widest">{title}</h4>
                 {data.length === 0 ? (
-                    <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-                        No data available
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground text-xs font-semibold">
+                        No transactions to display
                     </div>
                 ) : (
-                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[250px] [&_.recharts-surface]:overflow-visible">
+                    <ChartContainer config={chartConfig} className="mx-auto aspect-square h-[230px] [&_.recharts-surface]:overflow-visible">
                         <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                             <ChartTooltip
                                 content={
@@ -146,10 +147,10 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={45}
-                                outerRadius={75}
+                                outerRadius={80}
                                 paddingAngle={2}
-                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                strokeWidth={2}
+                                label={({ cx, cy, midAngle, outerRadius, percent }) => {
                                     if (percent < 0.05) return null;
                                     const RADIAN = Math.PI / 180;
                                     const radius = outerRadius + 20;
@@ -162,7 +163,7 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                                             fill="currentColor"
                                             textAnchor={x > cx ? 'start' : 'end'}
                                             dominantBaseline="central"
-                                            className="text-xs fill-muted-foreground"
+                                            className="text-[9px] font-bold fill-muted-foreground/80 tracking-tight"
                                         >
                                             {`${(percent * 100).toFixed(0)}%`}
                                         </text>
@@ -171,27 +172,13 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                                 labelLine={false}
                             >
                                 {data.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                    <Cell key={`cell-${index}`} fill={entry.fill} className="stroke-background stroke-2" />
                                 ))}
                             </Pie>
+                            <ChartLegend content={<ChartLegendContent nameKey="name" />} />
                         </PieChart>
                     </ChartContainer>
                 )}
-                {/* Legend */}
-                <div className="flex flex-wrap gap-2 justify-center px-2">
-                    {data.slice(0, 6).map((item) => (
-                        <div key={item.name} className="flex items-center gap-1.5 text-xs">
-                            <div
-                                className="w-2.5 h-2.5 rounded-full"
-                                style={{ backgroundColor: item.fill }}
-                            />
-                            <span className="text-muted-foreground">{item.name}</span>
-                        </div>
-                    ))}
-                    {data.length > 6 && (
-                        <span className="text-xs text-muted-foreground">+{data.length - 6} more</span>
-                    )}
-                </div>
             </div>
         );
     };
@@ -200,27 +187,27 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
         const chartConfig = generateChartConfig(data);
 
         return (
-            <div className="space-y-3">
-                <h4 className="text-sm font-medium text-center text-muted-foreground">{title}</h4>
+            <div className="space-y-4 py-2">
+                <h4 className="text-[10px] font-bold text-center text-muted-foreground uppercase tracking-widest">{title}</h4>
                 {data.length === 0 ? (
-                    <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                        No data available
+                    <div className="h-[220px] flex items-center justify-center text-muted-foreground text-xs font-semibold">
+                        No transactions to display
                     </div>
                 ) : (
                     <ChartContainer config={chartConfig} className="h-[220px] w-full">
                         <BarChart
                             data={data}
                             layout="vertical"
-                            margin={{ left: 0, right: 20 }}
+                            margin={{ left: -10, right: 10 }}
                         >
                             <YAxis
                                 dataKey="name"
                                 type="category"
                                 tickLine={false}
-                                tickMargin={8}
+                                tickMargin={6}
                                 axisLine={false}
-                                width={70}
-                                tick={{ fontSize: 10 }}
+                                width={65}
+                                tick={{ fontSize: 9, fontWeight: 600, fill: '#8E8E93' }}
                             />
                             <XAxis
                                 type="number"
@@ -237,6 +224,7 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
                             <Bar
                                 dataKey="value"
                                 radius={[0, 4, 4, 0]}
+                                barSize={10}
                             >
                                 {data.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -254,64 +242,66 @@ export function SummaryCharts({ transactions }: SummaryChartsProps) {
     };
 
     return (
-        <Card className="glass-card border-none">
-            <CardHeader className="pb-2">
+        <Card className="surface-card border border-border rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 pt-4 px-4">
                 <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">Summary</CardTitle>
+                    <CardTitle className="text-sm font-black tracking-tight text-foreground uppercase">Analysis</CardTitle>
                     {/* Chart Type Toggle */}
-                    <div className="flex items-center gap-1 bg-muted/50 border border-border/50 rounded-lg p-1">
+                    <div className="flex items-center gap-0.5 bg-muted/50 border border-border rounded-xl p-0.5">
                         <button
                             onClick={() => setChartType('pie')}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'pie'
-                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                                }`}
-                            title="Pie Chart"
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-[10px] font-bold uppercase tracking-wider ${
+                                chartType === 'pie'
+                                    ? 'bg-primary/10 text-primary border border-primary/10 shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground border border-transparent'
+                            }`}
+                            title="Pie Representation"
                         >
                             <PieChartIcon className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Pie</span>
+                            <span>Pie</span>
                         </button>
                         <button
                             onClick={() => setChartType('bar')}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all text-xs font-medium ${chartType === 'bar'
-                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                                }`}
-                            title="Bar Chart"
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all text-[10px] font-bold uppercase tracking-wider ${
+                                chartType === 'bar'
+                                    ? 'bg-primary/10 text-primary border border-primary/10 shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground border border-transparent'
+                            }`}
+                            title="Bar Representation"
                         >
                             <BarChart3 className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Bar</span>
+                            <span>Bar</span>
                         </button>
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 pb-5 pt-0">
                 <Tabs defaultValue="expense-category" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4 bg-accent/20 h-auto p-1">
-                        <TabsTrigger value="expense-category" className="text-xs py-2 px-1">
+                    <TabsList className="grid h-auto w-full grid-cols-4 rounded-xl border border-border bg-muted/60">
+                        <TabsTrigger value="expense-category" className="px-1 py-2 text-[10px] font-bold uppercase tracking-wider">
                             Expenses
                         </TabsTrigger>
-                        <TabsTrigger value="income-category" className="text-xs py-2 px-1">
+                        <TabsTrigger value="income-category" className="px-1 py-2 text-[10px] font-bold uppercase tracking-wider">
                             Income
                         </TabsTrigger>
-                        <TabsTrigger value="person" className="text-xs py-2 px-1">
+                        <TabsTrigger value="person" className="px-1 py-2 text-[10px] font-bold uppercase tracking-wider">
                             Person
                         </TabsTrigger>
-                        <TabsTrigger value="payment" className="text-xs py-2 px-1">
-                            Payment
+                        <TabsTrigger value="payment" className="px-1 py-2 text-[10px] font-bold uppercase tracking-wider">
+                            Mode
                         </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="expense-category" className="mt-4">
-                        {renderChart(categoryData, `Expenses by Category (₹${totalExpenses.toLocaleString()})`)}
+                    <TabsContent value="expense-category" className="mt-4 animate-fade-in">
+                        {renderChart(categoryData, `Expenses (${categoryData.length} Cats) · Total ₹${totalExpenses.toLocaleString()}`)}
                     </TabsContent>
-                    <TabsContent value="income-category" className="mt-4">
-                        {renderChart(incomeCategoryData, `Income by Category (₹${totalIncome.toLocaleString()})`)}
+                    <TabsContent value="income-category" className="mt-4 animate-fade-in">
+                        {renderChart(incomeCategoryData, `Income (${incomeCategoryData.length} Cats) · Total ₹${totalIncome.toLocaleString()}`)}
                     </TabsContent>
-                    <TabsContent value="person" className="mt-4">
-                        {renderChart(personData, 'Transactions by Person')}
+                    <TabsContent value="person" className="mt-4 animate-fade-in">
+                        {renderChart(personData, `Transactions by Person (${personData.length} People)`)}
                     </TabsContent>
-                    <TabsContent value="payment" className="mt-4">
-                        {renderChart(paymentModeData, 'Transactions by Payment Mode')}
+                    <TabsContent value="payment" className="mt-4 animate-fade-in">
+                        {renderChart(paymentModeData, `Transactions by Mode (${paymentModeData.length} Modes)`)}
                     </TabsContent>
                 </Tabs>
             </CardContent>

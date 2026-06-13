@@ -13,6 +13,14 @@ const LENDINGS_LEDGER_NAME = 'LENDINGS';
 const LENDINGS_CATEGORIES = ['Lending', 'Repayment'];
 const LENDINGS_PAYMENT_MODES = ['Cash', 'UPI', 'Bank Transfer'];
 
+function escapeTelegramHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // ============ TELEGRAM LINK OPERATIONS ============
 
 export interface TelegramLink {
@@ -43,36 +51,102 @@ export interface Lending {
     created_at: string;
 }
 
-async function migrateUserLedgers(oldUserId: string, newUserId: string): Promise<number | null> {
+async function restoreLendingsLedger(oldUserId: string, newUserId: string): Promise<'none' | 'moved' | 'merged' | null> {
     if (oldUserId === newUserId) {
-        return 0;
+        return 'none';
     }
 
-    const { data: oldLedgers, error: findError } = await supabase
+    const { data: oldLedgers, error: findNamedLedgerError } = await supabase
+        .from('ledgers')
+        .select('id, name')
+        .eq('user_id', oldUserId)
+        .eq('name', LENDINGS_LEDGER_NAME);
+
+    if (findNamedLedgerError) {
+        console.error('Error finding named old LENDINGS ledger:', findNamedLedgerError);
+        return null;
+    }
+
+    const oldLedger = oldLedgers?.[0];
+    if (!oldLedger) {
+        return 'none';
+    }
+
+    const { data: targetLedgers, error: targetLedgerError } = await supabase
         .from('ledgers')
         .select('id')
-        .eq('user_id', oldUserId);
+        .eq('user_id', newUserId)
+        .eq('name', LENDINGS_LEDGER_NAME);
 
-    if (findError) {
-        console.error('Error finding ledgers to migrate:', findError);
+    if (targetLedgerError) {
+        console.error('Error finding target LENDINGS ledger:', targetLedgerError);
         return null;
     }
 
-    if (!oldLedgers?.length) {
-        return 0;
+    const targetLedger = targetLedgers?.[0];
+
+    if (!targetLedger) {
+        const { error: moveLedgerError } = await supabase
+            .from('ledgers')
+            .update({ user_id: newUserId })
+            .eq('id', oldLedger.id);
+
+        if (moveLedgerError) {
+            console.error('Error moving LENDINGS ledger to re-linked user:', moveLedgerError);
+            return null;
+        }
+
+        return 'moved';
     }
 
-    const { error: updateError } = await supabase
+    if (targetLedger.id === oldLedger.id) {
+        return 'none';
+    }
+
+    const { data: oldTransactions, error: oldTransactionsError } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('ledger_id', oldLedger.id);
+
+    if (oldTransactionsError) {
+        console.error('Error finding old LENDINGS transactions:', oldTransactionsError);
+        return null;
+    }
+
+    const movedTransactionIds = (oldTransactions || []).map(transaction => transaction.id);
+
+    const { error: moveTransactionsError } = await supabase
+        .from('transactions')
+        .update({ ledger_id: targetLedger.id })
+        .eq('ledger_id', oldLedger.id);
+
+    if (moveTransactionsError) {
+        console.error('Error merging LENDINGS transactions:', moveTransactionsError);
+        return null;
+    }
+
+    const { error: deleteOldLedgerError } = await supabase
         .from('ledgers')
-        .update({ user_id: newUserId })
-        .eq('user_id', oldUserId);
+        .delete()
+        .eq('id', oldLedger.id);
 
-    if (updateError) {
-        console.error('Error migrating ledgers to re-linked user:', updateError);
+    if (deleteOldLedgerError) {
+        console.error('Error deleting duplicate old LENDINGS ledger:', deleteOldLedgerError);
+        if (movedTransactionIds.length > 0) {
+            const { error: rollbackError } = await supabase
+                .from('transactions')
+                .update({ ledger_id: oldLedger.id })
+                .in('id', movedTransactionIds);
+
+            if (rollbackError) {
+                console.error('Error rolling back LENDINGS merge:', rollbackError);
+            }
+        }
+
         return null;
     }
 
-    return oldLedgers.length;
+    return 'merged';
 }
 
 /**
@@ -151,9 +225,9 @@ export async function verifyAndLinkAccount(
     if (existingLink) {
         const oldUserId = existingLink.user_id;
 
-        const migratedLedgerCount = await migrateUserLedgers(oldUserId, targetUserId);
-        if (migratedLedgerCount === null) {
-            return { success: false, message: 'Telegram is linked, but your old ledgers could not be restored. Please try again.' };
+        const lendingsRestoreResult = await restoreLendingsLedger(oldUserId, targetUserId);
+        if (lendingsRestoreResult === null) {
+            return { success: false, message: 'Telegram is linked, but your old LENDINGS ledger could not be restored. Please try again.' };
         }
 
         const { error: relinkError } = await supabase
@@ -177,9 +251,15 @@ export async function verifyAndLinkAccount(
             return { success: true, message: '✅ Telegram is already linked to this account. Your LENDINGS ledger is ready.' };
         }
 
+        const restoreMessage = lendingsRestoreResult === 'merged'
+            ? 'Merged your old Telegram lendings into the current LENDINGS ledger.'
+            : lendingsRestoreResult === 'moved'
+                ? 'Restored your old Telegram LENDINGS ledger.'
+                : 'Your LENDINGS ledger is ready.';
+
         return {
             success: true,
-            message: `✅ Telegram re-linked successfully! Restored ${migratedLedgerCount} old ledger${migratedLedgerCount === 1 ? '' : 's'} to your web app.`,
+            message: `✅ Telegram re-linked successfully! ${restoreMessage}`,
         };
     }
 
@@ -380,8 +460,13 @@ export function parseLendingMessage(message: string): ParsedLending | null {
  * Supports: 500, 10k, 10K, 1.5k, ₹500, Rs500, Rs.500, 10,000
  */
 function parseAmount(amountStr: string): number | null {
-    // Remove currency symbols and commas
-    const cleaned = amountStr.replace(/[₹$,rs.]/gi, '').trim();
+    // Remove currency words/symbols and grouping commas, while preserving decimals.
+    const cleaned = amountStr
+        .replace(/₹/g, '')
+        .replace(/,/g, '')
+        .replace(/\$/g, '')
+        .replace(/^rs\.?/i, '')
+        .trim();
 
     // Handle 'k' suffix for thousands (10k = 10000, 1.5k = 1500)
     const kMatch = cleaned.match(/^([\d.]+)k$/i);
@@ -495,6 +580,43 @@ function capitalizeFirst(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
+async function applyRepaymentToLendingRecords(personName: string, amount: number): Promise<void> {
+    const { data: pendingLendings, error } = await supabase
+        .from('lendings')
+        .select('id, remaining_amount')
+        .eq('borrower_name', personName)
+        .neq('status', 'settled')
+        .order('created_at', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching pending lending records:', error);
+        return;
+    }
+
+    let remainingPayment = amount;
+
+    for (const lending of pendingLendings || []) {
+        if (remainingPayment <= 0) break;
+
+        const currentRemaining = Number(lending.remaining_amount);
+        const nextRemaining = Math.max(0, currentRemaining - remainingPayment);
+        remainingPayment = Math.max(0, remainingPayment - currentRemaining);
+
+        const { error: updateError } = await supabase
+            .from('lendings')
+            .update({
+                remaining_amount: nextRemaining,
+                status: nextRemaining === 0 ? 'settled' : 'partial',
+            })
+            .eq('id', lending.id);
+
+        if (updateError) {
+            console.error('Error updating lending record:', updateError);
+            return;
+        }
+    }
+}
+
 // ============ LENDING CREATION ============
 
 /**
@@ -579,9 +701,14 @@ export async function createLendingFromMessage(
             }
         }
 
+        if (parsed.intent === 'received' || parsed.intent === 'repaid') {
+            await applyRepaymentToLendingRecords(parsed.personName, parsed.amount);
+        }
+
         // Format success message
         const amountStr = `₹${parsed.amount.toLocaleString('en-IN')}`;
-        let successMsg = `${config.emoji} Recorded: ${config.verb} ${amountStr} ${parsed.intent === 'lent' || parsed.intent === 'repaid' ? 'to' : 'from'} ${parsed.personName}`;
+        const personName = escapeTelegramHtml(parsed.personName);
+        let successMsg = `${config.emoji} Recorded: ${config.verb} ${amountStr} ${parsed.intent === 'lent' || parsed.intent === 'repaid' ? 'to' : 'from'} ${personName}`;
 
         if ((parsed.intent === 'lent' || parsed.intent === 'borrowed') && parsed.dueDate) {
             const dueDateStr = parsed.dueDate.toLocaleDateString('en-IN', {

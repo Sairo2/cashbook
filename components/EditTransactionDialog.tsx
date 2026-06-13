@@ -34,7 +34,13 @@ interface EditTransactionDialogProps {
     onClose: () => void;
     transaction: Transaction;
     ledger: Ledger;
-    onSave: (data: any) => void;
+    onSave: (data: {
+        title: string;
+        amount: string;
+        category: string;
+        payment_mode: string;
+        person: string;
+    }) => void;
 }
 
 export function EditTransactionDialog({
@@ -67,7 +73,13 @@ export function EditTransactionDialog({
         }
     }, [transaction, form, ledger]);
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: {
+        title: string;
+        amount: string;
+        category: string;
+        payment_mode: string;
+        person: string;
+    }) => {
         onSave(data);
     };
 
@@ -75,37 +87,45 @@ export function EditTransactionDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-[95vw] rounded-2xl bg-card border-border">
-                <DialogHeader>
+            <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5 gap-0">
+                <DialogHeader className={`p-4 rounded-xl border mb-5 ${
+                    isCashIn 
+                        ? 'bg-primary/[0.05] border-primary/20' 
+                        : 'bg-destructive/[0.05] border-destructive/20'
+                }`}>
                     <DialogTitle className="flex items-center gap-3">
-                        <div
-                            className={`p-2.5 rounded-xl ${isCashIn
-                                ? 'bg-emerald-500/10 text-emerald-500'
-                                : 'bg-rose-500/10 text-rose-500'
-                                }`}
-                        >
-                            {isCashIn ? <Plus size={22} /> : <Minus size={22} />}
+                        <div className={`p-2 rounded-lg border ${
+                            isCashIn 
+                                ? 'bg-primary/10 border-primary/20 text-primary' 
+                                : 'bg-destructive/10 border-destructive/20 text-destructive'
+                        }`}>
+                            {isCashIn ? <Plus className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                         </div>
-                        <span className="text-xl">
-                            Edit {isCashIn ? 'Cash In' : 'Cash Out'}
-                        </span>
+                        <div className="space-y-0.5">
+                            <span className="text-sm font-bold tracking-tight text-foreground uppercase">
+                                Edit {isCashIn ? 'Cash In' : 'Cash Out'}
+                            </span>
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Update transaction details
+                            </p>
+                        </div>
                     </DialogTitle>
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 py-4">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                         <FormField
                             control={form.control}
                             name="title"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Title</FormLabel>
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Description</FormLabel>
                                     <FormControl>
                                         <Input
-                                            placeholder="e.g. Grocery, Salary"
+                                            placeholder="e.g., Groceries, Salary, Dinner"
                                             {...field}
                                             required
-                                            className="h-12 text-base"
+                                            className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
                                         />
                                     </FormControl>
                                     <FormMessage />
@@ -117,39 +137,42 @@ export function EditTransactionDialog({
                             control={form.control}
                             name="amount"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Amount (₹)</FormLabel>
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Amount *</FormLabel>
                                     <FormControl>
-                                        <Input
-                                            type="number"
-                                            inputMode="decimal"
-                                            placeholder="0.00"
-                                            {...field}
-                                            required
-                                            className="h-14 text-2xl font-bold"
-                                        />
+                                        <div className="relative">
+                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₹</span>
+                                            <Input
+                                                type="number"
+                                                inputMode="decimal"
+                                                placeholder="0.00"
+                                                {...field}
+                                                required
+                                                className="pl-8 text-base font-black h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl"
+                                            />
+                                        </div>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                             <FormField
                                 control={form.control}
                                 name="category"
                                 render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Category</FormLabel>
+                                    <FormItem className="space-y-1">
+                                        <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Category</FormLabel>
                                         <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
-                                                <SelectTrigger className="h-12">
+                                                <SelectTrigger className="text-xs h-11 surface-card border border-border focus:ring-1 focus:ring-primary/45 rounded-xl font-medium">
                                                     <SelectValue placeholder="Select category" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent>
+                                            <SelectContent className="surface-card-elevated border-border rounded-xl">
                                                 {ledger.categories.map((category) => (
-                                                    <SelectItem key={category} value={category}>
+                                                    <SelectItem key={category} value={category} className="text-xs font-medium py-2 rounded-lg cursor-pointer">
                                                         {category}
                                                     </SelectItem>
                                                 ))}
@@ -163,17 +186,17 @@ export function EditTransactionDialog({
                                 control={form.control}
                                 name="payment_mode"
                                 render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Payment Mode</FormLabel>
+                                    <FormItem className="space-y-1">
+                                        <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Mode</FormLabel>
                                         <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
-                                                <SelectTrigger className="h-12">
+                                                <SelectTrigger className="text-xs h-11 surface-card border border-border focus:ring-1 focus:ring-primary/45 rounded-xl font-medium">
                                                     <SelectValue placeholder="Select mode" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent>
+                                            <SelectContent className="surface-card-elevated border-border rounded-xl">
                                                 {ledger.payment_modes.map((mode) => (
-                                                    <SelectItem key={mode} value={mode}>
+                                                    <SelectItem key={mode} value={mode} className="text-xs font-medium py-2 rounded-lg cursor-pointer">
                                                         {mode}
                                                     </SelectItem>
                                                 ))}
@@ -188,28 +211,37 @@ export function EditTransactionDialog({
                             control={form.control}
                             name="person"
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Person (Optional)</FormLabel>
+                                <FormItem className="space-y-1">
+                                    <FormLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Person <span className="text-muted-foreground/60 text-[9px] font-semibold">(optional)</span></FormLabel>
                                     <FormControl>
                                         <Input
-                                            placeholder="e.g. Me, John Doe"
+                                            placeholder="e.g. John Doe, Me"
                                             {...field}
-                                            className="h-12"
+                                            className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
                                         />
                                     </FormControl>
                                 </FormItem>
                             )}
                         />
 
-                        <DialogFooter className="pt-2">
+                        <DialogFooter className="pt-2 flex gap-3 sm:gap-0 sm:flex-row">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={onClose}
+                                className="flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl bg-muted border-border hover:bg-accent"
+                            >
+                                Cancel
+                            </Button>
                             <Button
                                 type="submit"
-                                className={`w-full h-14 text-lg font-semibold ${isCashIn
-                                    ? 'cash-in-gradient'
-                                    : 'cash-out-gradient'
-                                    } hover:opacity-90`}
+                                className={`flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md active:scale-98 transition-all sm:ml-2 ${
+                                    isCashIn
+                                        ? 'cash-in-gradient hover:opacity-95 shadow-primary/10'
+                                        : 'cash-out-gradient hover:opacity-95 shadow-destructive/10'
+                                }`}
                             >
-                                Update Transaction
+                                Update Record
                             </Button>
                         </DialogFooter>
                     </form>

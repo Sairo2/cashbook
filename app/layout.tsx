@@ -1,19 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  axes: ["SOFT", "WONK", "opsz"],
 });
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0a0a14',
+  themeColor: '#F6F2EA',
 };
 
 export const metadata: Metadata = {
@@ -22,7 +27,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "CashBook",
   },
   formatDetection: {
@@ -36,13 +41,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${manrope.variable} ${fraunces.variable} font-sans antialiased`}>
         <div className="mobile-container">
           {children}
         </div>

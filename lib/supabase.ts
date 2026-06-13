@@ -13,7 +13,7 @@ export interface Ledger {
     categories: string[];
     payment_modes: string[];
     created_at: string;
-    user_id?: string;
+    user_id: string;
 }
 
 export interface Transaction {
@@ -26,6 +26,16 @@ export interface Transaction {
     payment_mode?: string;
     person?: string;
     ledger_id: string;
+}
+
+export interface LendingContact {
+    id: string;
+    user_id: string;
+    ledger_id: string;
+    person_name: string;
+    phone_number: string;
+    created_at: string;
+    updated_at: string;
 }
 
 // Default categories and payment modes for new ledgers

@@ -3,8 +3,6 @@
 import * as React from 'react';
 import { format } from 'date-fns';
 import {
-    ArrowUpCircle,
-    ArrowDownCircle,
     Tag,
     CreditCard,
     User,
@@ -36,7 +34,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 import { Transaction, Ledger } from '@/lib/supabase';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { deleteTransaction, updateTransaction } from '@/lib/store';
@@ -66,7 +63,7 @@ export function TransactionDetailDialog({
     if (!transaction) return null;
 
     const isCashIn = transaction.type === 'cash_in';
-    const CategoryIconComponent = getCategoryIcon(transaction.category);
+    const categoryIcon = getCategoryIcon(transaction.category);
 
     const handleDelete = async () => {
         setIsDeleting(true);
@@ -79,7 +76,13 @@ export function TransactionDetailDialog({
         setIsDeleteDialogOpen(false);
     };
 
-    const handleEdit = async (data: any) => {
+    const handleEdit = async (data: {
+        title: string;
+        amount: string;
+        category: string;
+        payment_mode: string;
+        person: string;
+    }) => {
         const updated = await updateTransaction(transaction.id, {
             title: data.title,
             amount: parseFloat(data.amount),
@@ -96,22 +99,28 @@ export function TransactionDetailDialog({
     return (
         <>
             <Dialog open={isOpen} onOpenChange={onClose}>
-                <DialogContent className="max-w-[95vw] sm:max-w-md rounded-2xl bg-card border-border p-0 overflow-hidden [&>button]:hidden">
+                <DialogContent className="max-w-[92vw] sm:max-w-md rounded-2xl surface-card-elevated border-border p-0 overflow-hidden [&>button]:hidden">
                     {/* Visually hidden title for accessibility */}
                     <DialogHeader className="sr-only">
                         <DialogTitle>Transaction Details</DialogTitle>
                     </DialogHeader>
 
                     {/* Header */}
-                    <div className="px-4 py-4 border-b border-border/50">
+                    <div className={`px-4 py-5 border-b border-border ${
+                        isCashIn ? 'bg-primary/[0.03]' : 'bg-destructive/[0.03]'
+                    }`}>
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className={`p-2.5 rounded-xl shrink-0 ${isCashIn ? 'bg-emerald-500/15' : 'bg-rose-500/15'}`}>
-                                    <CategoryIconComponent className={`h-5 w-5 ${isCashIn ? 'text-emerald-500' : 'text-rose-500'}`} />
+                            <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                                <div className={`p-2.5 rounded-xl shrink-0 border ${
+                                    isCashIn 
+                                        ? 'bg-primary/10 border-primary/20 text-primary' 
+                                        : 'bg-destructive/10 border-destructive/20 text-destructive'
+                                }`}>
+                                    {React.createElement(categoryIcon, { className: "h-5 w-5" })}
                                 </div>
-                                <div className="min-w-0 flex-1">
-                                    <h2 className="text-lg font-semibold truncate">{transaction.title}</h2>
-                                    <p className={`text-lg font-bold ${isCashIn ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                <div className="min-w-0 flex-1 space-y-0.5">
+                                    <h2 className="text-sm font-bold text-foreground truncate tracking-tight">{transaction.title}</h2>
+                                    <p className={`text-base font-black tracking-tight ${isCashIn ? 'text-primary' : 'text-destructive'}`}>
                                         {isCashIn ? '+' : '-'}₹{transaction.amount.toLocaleString()}
                                     </p>
                                 </div>
@@ -121,30 +130,31 @@ export function TransactionDetailDialog({
                             <div className="flex items-center gap-1 shrink-0">
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <button className="p-2 rounded-xl hover:bg-accent/20 transition-colors">
+                                        <button className="p-2 rounded-xl hover:bg-black/[0.03] active:scale-95 transition-all text-muted-foreground hover:text-foreground" aria-label="Transaction actions">
                                             <MoreHorizontal className="h-5 w-5" />
                                         </button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
+                                    <DropdownMenuContent align="end" className="w-44 surface-card-elevated border-border rounded-xl">
                                         <DropdownMenuItem
                                             onClick={() => setIsEditDialogOpen(true)}
-                                            className="cursor-pointer"
+                                            className="cursor-pointer py-2.5 text-sm rounded-lg"
                                         >
-                                            <Pencil className="h-4 w-4 mr-2" />
-                                            Edit
+                                            <Pencil className="h-4 w-4 mr-2.5 text-muted-foreground" />
+                                            Edit Record
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                             onClick={() => setIsDeleteDialogOpen(true)}
-                                            className="cursor-pointer text-destructive focus:text-destructive"
+                                            className="cursor-pointer py-2.5 text-sm rounded-lg text-destructive focus:text-destructive focus:bg-destructive/10"
                                         >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete
+                                            <Trash2 className="h-4 w-4 mr-2.5" />
+                                            Delete Record
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
                                 <button
                                     onClick={onClose}
-                                    className="p-2 rounded-xl hover:bg-accent/20 transition-colors"
+                                    className="p-2 rounded-xl hover:bg-black/[0.03] active:scale-95 transition-all text-muted-foreground hover:text-foreground"
+                                    aria-label="Close details"
                                 >
                                     <X className="h-5 w-5" />
                                 </button>
@@ -153,55 +163,57 @@ export function TransactionDetailDialog({
                     </div>
 
                     {/* Details */}
-                    <div className="px-4 py-4 space-y-3">
-
-                        {/* Info Grid */}
+                    <div className="px-4 py-5 space-y-4">
                         <div className="space-y-3">
-                            <div className="flex items-center gap-3 text-sm">
-                                <div className="p-2 rounded-lg bg-accent/30">
-                                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                            {/* Date Card */}
+                            <div className="flex items-center gap-3.5 p-3 rounded-xl border border-border bg-black/[0.01]">
+                                <div className="p-2 rounded-lg bg-muted/50 border border-border text-muted-foreground shrink-0">
+                                    <Calendar className="h-4 w-4" />
                                 </div>
-                                <div>
-                                    <p className="text-muted-foreground text-xs">Date & Time</p>
-                                    <p className="font-medium">
+                                <div className="space-y-0.5">
+                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Date & Time</p>
+                                    <p className="text-xs font-bold text-foreground">
                                         {format(new Date(transaction.created_at), 'EEEE, MMM dd, yyyy')}
-                                        <span className="text-muted-foreground ml-2">
+                                        <span className="text-muted-foreground ml-1.5 font-medium">
                                             {format(new Date(transaction.created_at), 'h:mm a')}
                                         </span>
                                     </p>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3 text-sm">
-                                <div className="p-2 rounded-lg bg-accent/30">
-                                    <Tag className="h-4 w-4 text-muted-foreground" />
+                            {/* Category Card */}
+                            <div className="flex items-center gap-3.5 p-3 rounded-xl border border-border bg-black/[0.01]">
+                                <div className="p-2 rounded-lg bg-muted/50 border border-border text-muted-foreground shrink-0">
+                                    <Tag className="h-4 w-4" />
                                 </div>
-                                <div>
-                                    <p className="text-muted-foreground text-xs">Category</p>
-                                    <p className="font-medium">{transaction.category}</p>
+                                <div className="space-y-0.5">
+                                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Category Tag</p>
+                                    <p className="text-xs font-bold text-foreground">{transaction.category}</p>
                                 </div>
                             </div>
 
+                            {/* Payment Mode Card */}
                             {transaction.payment_mode && (
-                                <div className="flex items-center gap-3 text-sm">
-                                    <div className="p-2 rounded-lg bg-accent/30">
-                                        <CreditCard className="h-4 w-4 text-muted-foreground" />
+                                <div className="flex items-center gap-3.5 p-3 rounded-xl border border-border bg-black/[0.01]">
+                                    <div className="p-2 rounded-lg bg-muted/50 border border-border text-muted-foreground shrink-0">
+                                        <CreditCard className="h-4 w-4" />
                                     </div>
-                                    <div>
-                                        <p className="text-muted-foreground text-xs">Payment Mode</p>
-                                        <p className="font-medium">{transaction.payment_mode}</p>
+                                    <div className="space-y-0.5">
+                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Payment Source</p>
+                                        <p className="text-xs font-bold text-foreground">{transaction.payment_mode}</p>
                                     </div>
                                 </div>
                             )}
 
+                            {/* Person Card */}
                             {transaction.person && (
-                                <div className="flex items-center gap-3 text-sm">
-                                    <div className="p-2 rounded-lg bg-accent/30">
-                                        <User className="h-4 w-4 text-muted-foreground" />
+                                <div className="flex items-center gap-3.5 p-3 rounded-xl border border-border bg-black/[0.01]">
+                                    <div className="p-2 rounded-lg bg-muted/50 border border-border text-muted-foreground shrink-0">
+                                        <User className="h-4 w-4" />
                                     </div>
-                                    <div>
-                                        <p className="text-muted-foreground text-xs">Person</p>
-                                        <p className="font-medium">{transaction.person}</p>
+                                    <div className="space-y-0.5">
+                                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest leading-none">Involved Party</p>
+                                        <p className="text-xs font-bold text-foreground">{transaction.person}</p>
                                     </div>
                                 </div>
                             )}
@@ -212,22 +224,21 @@ export function TransactionDetailDialog({
 
             {/* Delete Confirmation */}
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl">
+                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete "{transaction.title}"?
-                            This action cannot be undone.
+                        <AlertDialogTitle className="text-base font-bold">Delete Transaction</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                            Are you sure you want to permanently delete <span className="font-semibold text-foreground">&quot;{transaction.title}&quot;</span>? This will deduct the amount from your ledger balance. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="flex-row gap-2 sm:gap-2">
-                        <AlertDialogCancel className="flex-1 mt-0">Cancel</AlertDialogCancel>
+                    <AlertDialogFooter className="flex-row gap-2 sm:gap-0 mt-3">
+                        <AlertDialogCancel className="flex-1 mt-0 text-xs py-2 rounded-xl bg-muted border-border hover:bg-accent">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDelete}
                             disabled={isDeleting}
-                            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs py-2 rounded-xl shadow-md active:scale-98"
                         >
-                            {isDeleting ? 'Deleting...' : 'Delete'}
+                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

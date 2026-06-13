@@ -32,6 +32,16 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd, editLedger }: AddLedge
 
     const isEditMode = !!editLedger;
 
+    const resetForm = () => {
+        setName('');
+        setCategories(DEFAULT_CATEGORIES);
+        setPaymentModes(DEFAULT_PAYMENT_MODES);
+        setNewCategory('');
+        setNewPaymentMode('');
+        setShowAddCategory(false);
+        setShowAddPaymentMode(false);
+    };
+
     // Populate form when editing
     React.useEffect(() => {
         if (editLedger) {
@@ -50,43 +60,41 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd, editLedger }: AddLedge
         resetForm();
     };
 
-    const resetForm = () => {
-        setName('');
-        setCategories(DEFAULT_CATEGORIES);
-        setPaymentModes(DEFAULT_PAYMENT_MODES);
-        setNewCategory('');
-        setNewPaymentMode('');
-        setShowAddCategory(false);
-        setShowAddPaymentMode(false);
-    };
-
     const toggleCategory = (category: string) => {
         if (categories.includes(category)) {
-            setCategories(categories.filter(c => c !== category));
+            setCategories(prev => prev.filter(c => c !== category));
         } else {
-            setCategories([...categories, category]);
+            setCategories(prev => [...prev, category]);
         }
     };
 
     const togglePaymentMode = (mode: string) => {
         if (paymentModes.includes(mode)) {
-            setPaymentModes(paymentModes.filter(m => m !== mode));
+            setPaymentModes(prev => prev.filter(m => m !== mode));
         } else {
-            setPaymentModes([...paymentModes, mode]);
+            setPaymentModes(prev => [...prev, mode]);
         }
     };
 
     const addNewCategory = () => {
-        if (newCategory.trim() && !categories.includes(newCategory.trim())) {
-            setCategories([...categories, newCategory.trim()]);
+        const trimmed = newCategory.trim();
+        if (trimmed) {
+            const lowerCategories = categories.map(c => c.toLowerCase());
+            if (!lowerCategories.includes(trimmed.toLowerCase())) {
+                setCategories(prev => [...prev, trimmed]);
+            }
             setNewCategory('');
             setShowAddCategory(false);
         }
     };
 
     const addNewPaymentMode = () => {
-        if (newPaymentMode.trim() && !paymentModes.includes(newPaymentMode.trim())) {
-            setPaymentModes([...paymentModes, newPaymentMode.trim()]);
+        const trimmed = newPaymentMode.trim();
+        if (trimmed) {
+            const lowerModes = paymentModes.map(m => m.toLowerCase());
+            if (!lowerModes.includes(trimmed.toLowerCase())) {
+                setPaymentModes(prev => [...prev, trimmed]);
+            }
             setNewPaymentMode('');
             setShowAddPaymentMode(false);
         }
@@ -106,139 +114,137 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd, editLedger }: AddLedge
 
     return (
         <Dialog open={isOpen} onOpenChange={() => { onClose(); resetForm(); }}>
-            <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto bg-card border-border rounded-2xl">
-                <DialogHeader>
-                    <DialogTitle className="text-xl">
-                        {isEditMode ? 'Edit Ledger' : 'Create New Ledger'}
+            <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5">
+                <DialogHeader className="pb-3 border-b border-border">
+                    <DialogTitle className="text-base font-black tracking-tight text-foreground uppercase">
+                        {isEditMode ? 'Edit Ledger Details' : 'Create New Ledger'}
                     </DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-6 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="ledger-name">Ledger Name</Label>
+                <form onSubmit={handleSubmit} className="space-y-5 py-2">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="ledger-name" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Ledger Name</Label>
                         <Input
                             id="ledger-name"
-                            placeholder="e.g. Personal, Business, Family"
+                            placeholder="e.g., Personal, Business, Shared Room"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
-                            className="text-lg h-12"
+                            className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl placeholder:text-muted-foreground/60 font-medium"
                         />
                     </div>
 
                     {/* Categories Section */}
-                    <div className="space-y-3">
-                        <Label>Categories</Label>
-                        <p className="text-xs text-muted-foreground -mt-1">
-                            Select the categories for this ledger
-                        </p>
-                        <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Categories</Label>
+                            <span className="text-[9px] font-semibold text-muted-foreground/80">Configure transactions tags</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5 p-3 rounded-xl border border-border bg-black/[0.01]">
                             {allCategories.map((category) => (
                                 <button
                                     key={category}
                                     type="button"
                                     onClick={() => toggleCategory(category)}
-                                    className={`pill ${categories.includes(category) ? 'selected' : ''}`}
+                                    className={`pill text-[10px] font-bold ${categories.includes(category) ? 'selected' : ''}`}
                                 >
                                     {category}
                                     {!DEFAULT_CATEGORIES.includes(category) && categories.includes(category) && (
-                                        <X className="h-3 w-3 ml-1" />
+                                        <X className="h-3 w-3 ml-1 text-primary-foreground/75" />
                                     )}
                                 </button>
                             ))}
                             {showAddCategory ? (
-                                <div className="flex gap-2 items-center">
+                                <div className="flex gap-1.5 items-center">
                                     <Input
-                                        placeholder="New category"
+                                        placeholder="Category..."
                                         value={newCategory}
                                         onChange={(e) => setNewCategory(e.target.value)}
-                                        className="h-8 w-32 text-sm"
+                                        className="h-7 w-24 text-[10px] font-bold bg-background/50 border-border rounded-lg p-1.5 focus-visible:ring-0"
                                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewCategory())}
                                         autoFocus
                                     />
                                     <Button
                                         type="button"
-                                        size="sm"
-                                        variant="ghost"
+                                        size="icon"
                                         onClick={addNewCategory}
-                                        className="h-8 px-2"
+                                        className="h-7 w-7 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary"
                                     >
-                                        <Plus className="h-4 w-4" />
+                                        <Plus className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
                             ) : (
                                 <button
                                     type="button"
                                     onClick={() => setShowAddCategory(true)}
-                                    className="pill add-new"
+                                    className="pill add-new text-[10px]"
                                 >
                                     <Plus className="h-3 w-3" />
-                                    Add New
+                                    Add Custom
                                 </button>
                             )}
                         </div>
                     </div>
 
                     {/* Payment Modes Section */}
-                    <div className="space-y-3">
-                        <Label>Payment Modes</Label>
-                        <p className="text-xs text-muted-foreground -mt-1">
-                            Select the payment modes for this ledger
-                        </p>
-                        <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Payment Methods</Label>
+                            <span className="text-[9px] font-semibold text-muted-foreground/80">Configure tracking sources</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5 p-3 rounded-xl border border-border bg-black/[0.01]">
                             {allPaymentModes.map((mode) => (
                                 <button
                                     key={mode}
                                     type="button"
                                     onClick={() => togglePaymentMode(mode)}
-                                    className={`pill ${paymentModes.includes(mode) ? 'selected' : ''}`}
+                                    className={`pill text-[10px] font-bold ${paymentModes.includes(mode) ? 'selected' : ''}`}
                                 >
                                     {mode}
                                     {!DEFAULT_PAYMENT_MODES.includes(mode) && paymentModes.includes(mode) && (
-                                        <X className="h-3 w-3 ml-1" />
+                                        <X className="h-3 w-3 ml-1 text-primary-foreground/75" />
                                     )}
                                 </button>
                             ))}
                             {showAddPaymentMode ? (
-                                <div className="flex gap-2 items-center">
+                                <div className="flex gap-1.5 items-center">
                                     <Input
-                                        placeholder="New mode"
+                                        placeholder="Mode..."
                                         value={newPaymentMode}
                                         onChange={(e) => setNewPaymentMode(e.target.value)}
-                                        className="h-8 w-32 text-sm"
+                                        className="h-7 w-24 text-[10px] font-bold bg-background/50 border-border rounded-lg p-1.5 focus-visible:ring-0"
                                         onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNewPaymentMode())}
                                         autoFocus
                                     />
                                     <Button
                                         type="button"
-                                        size="sm"
-                                        variant="ghost"
+                                        size="icon"
                                         onClick={addNewPaymentMode}
-                                        className="h-8 px-2"
+                                        className="h-7 w-7 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary"
                                     >
-                                        <Plus className="h-4 w-4" />
+                                        <Plus className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
                             ) : (
                                 <button
                                     type="button"
                                     onClick={() => setShowAddPaymentMode(true)}
-                                    className="pill add-new"
+                                    className="pill add-new text-[10px]"
                                 >
                                     <Plus className="h-3 w-3" />
-                                    Add New
+                                    Add Custom
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    <DialogFooter className="pt-4">
+                    <DialogFooter className="pt-2">
                         <Button
                             type="submit"
-                            className="w-full h-12 text-lg font-semibold cash-in-gradient hover:opacity-90"
+                            className="w-full h-11 text-xs font-bold uppercase tracking-wider cash-in-gradient hover:opacity-95 active:scale-98 transition-all rounded-xl shadow-md shadow-primary/10"
                             disabled={!name.trim()}
                         >
-                            {isEditMode ? 'Update Ledger' : 'Create Ledger'}
+                            {isEditMode ? 'Update Ledger Config' : 'Create Ledger'}
                         </Button>
                     </DialogFooter>
                 </form>
@@ -246,4 +252,3 @@ export function AddLedgerDialog({ isOpen, onClose, onAdd, editLedger }: AddLedge
         </Dialog>
     );
 }
-

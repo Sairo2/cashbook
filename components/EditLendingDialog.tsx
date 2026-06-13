@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import {
-    User,
     Plus,
     Check,
     ArrowUpRight,
@@ -47,7 +46,6 @@ export function EditLendingDialog({
     isOpen,
     onClose,
     transaction,
-    ledger,
     onTransactionUpdated,
     onTransactionDeleted,
     existingPeople = [],
@@ -66,10 +64,24 @@ export function EditLendingDialog({
     React.useEffect(() => {
         if (transaction) {
             setAmount(transaction.amount.toString());
-            setPerson(transaction.person || '');
             setNote(transaction.title || '');
 
-            // Determine intent from transaction
+            // Fix Medium Bug #15: Check if transaction.person is in existingPeople.
+            // If it is NOT, we must automatically show the custom text field and prefill it.
+            const tPerson = transaction.person || '';
+            const exists = existingPeople.some(p => p.toLowerCase() === tPerson.toLowerCase());
+
+            if (exists) {
+                setPerson(tPerson);
+                setShowNewPerson(false);
+                setNewPerson('');
+            } else {
+                setPerson('');
+                setShowNewPerson(true);
+                setNewPerson(tPerson);
+            }
+
+            // Determine intent from transaction type and category
             const category = transaction.category?.toLowerCase() || '';
             if (transaction.type === 'cash_out') {
                 setIntent(category.includes('repay') ? 'repaid' : 'lent');
@@ -77,25 +89,27 @@ export function EditLendingDialog({
                 setIntent(category.includes('borrow') ? 'borrowed' : 'received');
             }
         }
-    }, [transaction]);
+    }, [transaction, existingPeople]);
 
     const isGave = intent === 'lent' || intent === 'repaid';
 
     const intentLabels = {
-        lent: { title: 'Lent Money', subtitle: 'They will owe you', color: 'emerald' },
+        lent: { title: 'Lent Money', subtitle: 'They owe you now', color: 'emerald' },
         repaid: { title: 'Repaid Debt', subtitle: 'You owed them', color: 'rose' },
         received: { title: 'Received Payment', subtitle: 'They owed you', color: 'emerald' },
-        borrowed: { title: 'Borrowed Money', subtitle: 'You will owe them', color: 'rose' },
+        borrowed: { title: 'Borrowed Money', subtitle: 'You owe them now', color: 'rose' },
     };
 
     const currentIntent = intentLabels[intent];
     const isEmerald = currentIntent.color === 'emerald';
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
         if (!transaction) return;
 
-        const amountNum = parseFloat(amount);
-        if (!amountNum || amountNum <= 0) return;
+        const parsed = parseFloat(amount);
+        const amountNum = isNaN(parsed) ? 0 : parsed;
+        if (amountNum <= 0) return;
 
         const personName = showNewPerson ? newPerson.trim() : person;
         if (!personName) return;
@@ -155,89 +169,102 @@ export function EditLendingDialog({
         onClose();
     };
 
-    const isValid = parseFloat(amount) > 0 && (showNewPerson ? newPerson.trim() : person);
+    const parsedAmount = parseFloat(amount);
+    const isValid = !isNaN(parsedAmount) && parsedAmount > 0 && (showNewPerson ? newPerson.trim() : person);
 
     if (!transaction) return null;
 
     return (
         <>
             <Dialog open={isOpen} onOpenChange={handleClose}>
-                <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl p-0 gap-0">
-                    <DialogHeader className={`p-4 pb-3 border-b border-border ${isEmerald ? 'bg-emerald-500/10' : 'bg-rose-500/10'
-                        }`}>
-                        <DialogTitle className="flex items-center gap-2">
-                            <div className={`p-1.5 rounded-lg ${isEmerald ? 'bg-emerald-500/20' : 'bg-rose-500/20'
-                                }`}>
+                <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5 gap-0">
+                    <DialogHeader className={`p-4 rounded-xl border mb-5 ${
+                        isEmerald 
+                            ? 'bg-primary/[0.05] border-primary/20' 
+                            : 'bg-destructive/[0.05] border-destructive/20'
+                    }`}>
+                        <DialogTitle className="flex items-center gap-3">
+                            <div className={`p-2 rounded-lg border ${
+                                isEmerald 
+                                    ? 'bg-primary/10 border-primary/20 text-primary' 
+                                    : 'bg-destructive/10 border-destructive/20 text-destructive'
+                            }`}>
                                 {isGave ? (
-                                    <ArrowUpRight className={`h-4 w-4 ${isEmerald ? 'text-emerald-500' : 'text-rose-500'}`} />
+                                    <ArrowUpRight className="h-4 w-4" />
                                 ) : (
-                                    <ArrowDownLeft className={`h-4 w-4 ${isEmerald ? 'text-emerald-500' : 'text-rose-500'}`} />
+                                    <ArrowDownLeft className="h-4 w-4" />
                                 )}
                             </div>
-                            <div>
-                                <span className="text-base">Edit Transaction</span>
-                                <p className="text-xs font-normal text-muted-foreground mt-0.5">
+                            <div className="space-y-0.5">
+                                <span className="text-sm font-bold tracking-tight text-foreground uppercase">Edit Debt Record</span>
+                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                                     {currentIntent.subtitle}
                                 </p>
                             </div>
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="p-4 space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Intent Toggle */}
-                        <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">Transaction Type</Label>
-                            <div className="grid grid-cols-4 gap-1 rounded-lg bg-accent/30 p-1">
-                                {(['lent', 'received', 'repaid', 'borrowed'] as LendingIntent[]).map((i) => (
-                                    <button
-                                        key={i}
-                                        type="button"
-                                        onClick={() => setIntent(i)}
-                                        className={`py-2 px-2 rounded-md text-xs font-medium transition-all ${intent === i
-                                                ? intentLabels[i].color === 'emerald'
-                                                    ? 'bg-emerald-500 text-white shadow-sm'
-                                                    : 'bg-rose-500 text-white shadow-sm'
-                                                : 'text-muted-foreground hover:text-foreground'
+                        <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Transaction Category</Label>
+                            <div className="grid grid-cols-4 gap-0.5 bg-black/[0.02] border border-border rounded-xl p-0.5">
+                                {(['lent', 'received', 'repaid', 'borrowed'] as LendingIntent[]).map((i) => {
+                                    const active = intent === i;
+                                    const emeraldType = intentLabels[i].color === 'emerald';
+                                    return (
+                                        <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => setIntent(i)}
+                                            className={`py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                                active
+                                                    ? emeraldType
+                                                        ? 'bg-primary/15 text-primary border border-primary/10 shadow-sm'
+                                                        : 'bg-destructive/15 text-destructive border border-destructive/10 shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground border border-transparent'
                                             }`}
-                                    >
-                                        {i.charAt(0).toUpperCase() + i.slice(1)}
-                                    </button>
-                                ))}
+                                        >
+                                            {i}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
                         {/* Amount */}
-                        <div className="space-y-2">
-                            <Label>Amount *</Label>
+                        <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Amount *</Label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₹</span>
                                 <Input
                                     type="number"
-                                    placeholder="0"
+                                    placeholder="0.00"
                                     value={amount}
                                     onChange={(e) => setAmount(e.target.value)}
-                                    className="pl-8 text-xl font-semibold h-12"
+                                    className="pl-8 text-base font-black h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl"
+                                    required
                                 />
                             </div>
                         </div>
 
                         {/* Person Selection */}
                         <div className="space-y-2">
-                            <Label>Person *</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Person *</Label>
+                                <span className="text-[9px] font-semibold text-muted-foreground/80">Account contact</span>
+                            </div>
 
                             {existingPeople.length > 0 && !showNewPerson && (
-                                <div className="flex flex-wrap gap-2 mb-2">
+                                <div className="flex flex-wrap gap-2.5 p-3 rounded-xl border border-border bg-black/[0.01]">
                                     {existingPeople.map((p) => (
                                         <button
                                             key={p}
                                             type="button"
                                             onClick={() => setPerson(p)}
-                                            className={`px-3 py-1.5 rounded-full text-sm transition-all ${person === p
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-accent/50 text-foreground hover:bg-accent'
-                                                }`}
+                                            className={`pill text-[10px] font-bold ${person === p ? 'selected' : ''}`}
                                         >
-                                            {person === p && <Check className="inline h-3 w-3 mr-1" />}
+                                            {person === p && <Check className="h-3 w-3 mr-1" />}
                                             {p}
                                         </button>
                                     ))}
@@ -247,10 +274,10 @@ export function EditLendingDialog({
                                             setShowNewPerson(true);
                                             setPerson('');
                                         }}
-                                        className="px-3 py-1.5 rounded-full text-sm bg-transparent border border-dashed border-muted-foreground/50 text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                        className="pill add-new text-[10px]"
                                     >
-                                        <Plus className="inline h-3 w-3 mr-1" />
-                                        New
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add Custom
                                     </button>
                                 </div>
                             )}
@@ -261,6 +288,8 @@ export function EditLendingDialog({
                                         placeholder="Enter person's name"
                                         value={newPerson}
                                         onChange={(e) => setNewPerson(e.target.value)}
+                                        className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
+                                        required
                                     />
                                     {existingPeople.length > 0 && (
                                         <button
@@ -269,9 +298,9 @@ export function EditLendingDialog({
                                                 setShowNewPerson(false);
                                                 setNewPerson('');
                                             }}
-                                            className="text-xs text-muted-foreground hover:text-foreground"
+                                            className="text-[9px] font-bold text-primary hover:underline"
                                         >
-                                            ← Select existing person
+                                            ← Select from contacts
                                         </button>
                                     )}
                                 </div>
@@ -279,63 +308,68 @@ export function EditLendingDialog({
                         </div>
 
                         {/* Note */}
-                        <div className="space-y-2">
-                            <Label>Note <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                        <div className="space-y-1.5">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Note <span className="text-muted-foreground/60 text-[9px] font-semibold">(optional)</span></Label>
                             <Input
-                                placeholder="What's this for?"
+                                placeholder="Add brief details/description..."
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
+                                className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
                             />
                         </div>
-                    </div>
 
-                    {/* Actions */}
-                    <div className="p-4 pt-0 flex gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsDeleteDialogOpen(true)}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={handleClose}
-                            className="flex-1"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleSubmit}
-                            disabled={!isValid || isSaving}
-                            className={`flex-1 ${isEmerald
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                    : 'bg-rose-500 hover:bg-rose-600 text-white'
+                        {/* Actions */}
+                        <div className="pt-2 flex gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsDeleteDialogOpen(true)}
+                                className="h-11 px-3 text-destructive border-destructive/20 hover:bg-destructive/10 rounded-xl"
+                                aria-label="Delete transaction"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClose}
+                                className="flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl bg-muted border-border hover:bg-accent"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={!isValid || isSaving}
+                                className={`flex-[1.5] h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md active:scale-98 transition-all ${
+                                    isEmerald
+                                        ? 'cash-in-gradient hover:opacity-95 shadow-primary/10'
+                                        : 'cash-out-gradient hover:opacity-95 shadow-destructive/10'
                                 }`}
-                        >
-                            {isSaving ? 'Saving...' : 'Save'}
-                        </Button>
-                    </div>
+                            >
+                                {isSaving ? 'Saving...' : 'Save Changes'}
+                            </Button>
+                        </div>
+                    </form>
                 </DialogContent>
             </Dialog>
 
             {/* Delete Confirmation */}
             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl">
+                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete this transaction? This action cannot be undone.
+                        <AlertDialogTitle className="text-base font-bold">Delete Transaction</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                            Are you sure you want to permanently delete this lending transaction? This will update the contact&apos;s outstanding balance, and this action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="flex-row gap-2">
-                        <AlertDialogCancel className="flex-1 mt-0">Cancel</AlertDialogCancel>
+                    <AlertDialogFooter className="flex-row gap-2 sm:gap-0 mt-3">
+                        <AlertDialogCancel className="flex-1 mt-0 text-xs py-2 rounded-xl bg-muted border-border hover:bg-accent">Cancel</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDelete}
                             disabled={isDeleting}
-                            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs py-2 rounded-xl shadow-md active:scale-98"
                         >
-                            {isDeleting ? 'Deleting...' : 'Delete'}
+                            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

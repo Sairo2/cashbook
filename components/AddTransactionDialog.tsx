@@ -27,14 +27,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { TransactionType, Ledger } from '@/lib/supabase';
+import { Transaction, TransactionType, Ledger } from '@/lib/supabase';
 
 interface AddTransactionDialogProps {
     isOpen: boolean;
     onClose: () => void;
     type: TransactionType;
     ledger: Ledger;
-    onAdd: (data: any) => void;
+    onAdd: (data: Omit<Transaction, 'id' | 'created_at'>) => void;
 }
 
 export function AddTransactionDialog({
@@ -54,22 +54,30 @@ export function AddTransactionDialog({
         },
     });
 
+    // Reset form when dialog OPENS (not when ledger changes)
     React.useEffect(() => {
-        // Reset form when dialog opens
-        form.reset({
-            title: '',
-            amount: '',
-            category: '',
-            payment_mode: '',
-            person: '',
-        });
-    }, [ledger, form]);
+        if (isOpen) {
+            form.reset({
+                title: '',
+                amount: '',
+                category: '',
+                payment_mode: '',
+                person: '',
+            });
+        }
+    }, [isOpen, form]);
 
-    const onSubmit = (data: any) => {
+    const onSubmit = (data: Record<string, string>) => {
+        const amount = parseFloat(data.amount);
+        if (isNaN(amount) || amount <= 0) return; // Guard against NaN/invalid amounts
+
         onAdd({
-            ...data,
-            amount: parseFloat(data.amount),
+            title: data.title,
+            amount,
             type,
+            category: data.category || 'Other',
+            payment_mode: data.payment_mode || undefined,
+            person: data.person || undefined,
             ledger_id: ledger.id,
         });
         form.reset();
@@ -78,13 +86,13 @@ export function AddTransactionDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-[95vw] rounded-2xl bg-card border-border">
+            <DialogContent className="max-w-[95vw] rounded-2xl bg-card border-border surface-card-elevated">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-3">
                         <div
                             className={`p-2.5 rounded-xl ${type === 'cash_in'
-                                ? 'bg-emerald-500/10 text-emerald-500'
-                                : 'bg-rose-500/10 text-rose-500'
+                                ? 'bg-primary/10 text-primary'
+                                : 'bg-destructive/10 text-destructive'
                                 }`}
                         >
                             {type === 'cash_in' ? <Plus size={22} /> : <Minus size={22} />}
@@ -129,6 +137,8 @@ export function AddTransactionDialog({
                                             placeholder="0.00"
                                             {...field}
                                             required
+                                            min="0.01"
+                                            step="0.01"
                                             className="h-14 text-2xl font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus-visible:ring-1 focus-visible:ring-primary/50"
                                         />
                                     </FormControl>

@@ -1,10 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { format } from 'date-fns';
 import {
-    User,
-    Calendar,
     Plus,
     Check,
     ArrowUpRight,
@@ -60,32 +57,25 @@ export function AddLendingDialog({
     const isGave = direction === 'gave';
 
     const intentLabels = {
-        lent: { title: 'Lent Money', subtitle: 'They will owe you', color: 'emerald' },
+        lent: { title: 'Lent Money', subtitle: 'They owe you now', color: 'emerald' },
         repaid: { title: 'Repaid Debt', subtitle: 'You owed them', color: 'rose' },
         received: { title: 'Received Payment', subtitle: 'They owed you', color: 'emerald' },
-        borrowed: { title: 'Borrowed Money', subtitle: 'You will owe them', color: 'rose' },
+        borrowed: { title: 'Borrowed Money', subtitle: 'You owe them now', color: 'rose' },
     };
 
     const currentIntent = intentLabels[intent];
     const isEmerald = currentIntent.color === 'emerald';
 
-    const handleSubmit = () => {
-        const amountNum = parseFloat(amount);
-        if (!amountNum || amountNum <= 0) return;
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const parsed = parseFloat(amount);
+        const amountNum = isNaN(parsed) ? 0 : parsed;
+        if (amountNum <= 0) return;
 
         const personName = showNewPerson ? newPerson.trim() : person;
         if (!personName) return;
 
-        // Determine transaction type based on intent
-        // Lent/Repaid = money going out (cash_out)
-        // Received/Borrowed = money coming in (cash_in)
         const transactionType = isGave ? 'cash_out' : 'cash_in';
-
-        // For balance calculation:
-        // Lent (cash_out) → they owe me more (+)
-        // Repaid (cash_out) → I owe them less, so record as cash_out to them
-        // Received (cash_in) → they owe me less
-        // Borrowed (cash_in) → I owe them more
 
         const titleMap = {
             lent: `Lent to ${personName}`,
@@ -111,13 +101,7 @@ export function AddLendingDialog({
             person: personName,
         });
 
-        // Reset form
-        setAmount('');
-        setPerson('');
-        setNewPerson('');
-        setNote('');
-        setShowNewPerson(false);
-        onClose();
+        handleClose();
     };
 
     const handleClose = () => {
@@ -129,55 +113,64 @@ export function AddLendingDialog({
         onClose();
     };
 
-    const isValid = parseFloat(amount) > 0 && (showNewPerson ? newPerson.trim() : person);
+    const parsedAmount = parseFloat(amount);
+    const isValid = !isNaN(parsedAmount) && parsedAmount > 0 && (showNewPerson ? newPerson.trim() : person);
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl p-0 gap-0">
-                <DialogHeader className={`p-4 pb-3 border-b border-border ${isEmerald ? 'bg-emerald-500/10' : 'bg-rose-500/10'
-                    }`}>
-                    <DialogTitle className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg ${isEmerald ? 'bg-emerald-500/20' : 'bg-rose-500/20'
-                            }`}>
+            <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5 gap-0">
+                <DialogHeader className={`p-4 rounded-xl border mb-5 ${
+                    isEmerald 
+                        ? 'bg-primary/[0.05] border-primary/20' 
+                        : 'bg-destructive/[0.05] border-destructive/20'
+                }`}>
+                    <DialogTitle className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg border ${
+                            isEmerald 
+                                ? 'bg-primary/10 border-primary/20 text-primary' 
+                                : 'bg-destructive/10 border-destructive/20 text-destructive'
+                        }`}>
                             {isGave ? (
-                                <ArrowUpRight className={`h-4 w-4 ${isEmerald ? 'text-emerald-500' : 'text-rose-500'}`} />
+                                <ArrowUpRight className="h-4 w-4" />
                             ) : (
-                                <ArrowDownLeft className={`h-4 w-4 ${isEmerald ? 'text-emerald-500' : 'text-rose-500'}`} />
+                                <ArrowDownLeft className="h-4 w-4" />
                             )}
                         </div>
-                        <div>
-                            <span className="text-base">{currentIntent.title}</span>
-                            <p className="text-xs font-normal text-muted-foreground mt-0.5">
+                        <div className="space-y-0.5">
+                            <span className="text-sm font-bold tracking-tight text-foreground uppercase">{currentIntent.title}</span>
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                                 {currentIntent.subtitle}
                             </p>
                         </div>
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="p-4 space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-5">
                     {/* Intent Toggle */}
-                    <div className="flex rounded-lg bg-accent/30 p-1">
+                    <div className="flex bg-black/[0.02] border border-border rounded-xl p-0.5">
                         {isGave ? (
                             <>
                                 <button
                                     type="button"
                                     onClick={() => setIntent('lent')}
-                                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${intent === 'lent'
-                                            ? 'bg-emerald-500 text-white shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                        intent === 'lent'
+                                            ? 'bg-primary/15 text-primary border border-primary/15'
+                                            : 'text-muted-foreground hover:text-foreground border border-transparent'
+                                    }`}
                                 >
-                                    Lent
+                                    Lent (Owed to You)
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIntent('repaid')}
-                                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${intent === 'repaid'
-                                            ? 'bg-rose-500 text-white shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                        intent === 'repaid'
+                                            ? 'bg-destructive/15 text-destructive border border-destructive/15'
+                                            : 'text-muted-foreground hover:text-foreground border border-transparent'
+                                    }`}
                                 >
-                                    Repaid
+                                    Repaid (You Owed)
                                 </button>
                             </>
                         ) : (
@@ -185,60 +178,63 @@ export function AddLendingDialog({
                                 <button
                                     type="button"
                                     onClick={() => setIntent('received')}
-                                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${intent === 'received'
-                                            ? 'bg-emerald-500 text-white shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                        intent === 'received'
+                                            ? 'bg-primary/15 text-primary border border-primary/15'
+                                            : 'text-muted-foreground hover:text-foreground border border-transparent'
+                                    }`}
                                 >
-                                    Received
+                                    Received (Repaid to You)
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setIntent('borrowed')}
-                                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all ${intent === 'borrowed'
-                                            ? 'bg-rose-500 text-white shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
+                                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+                                        intent === 'borrowed'
+                                            ? 'bg-destructive/15 text-destructive border border-destructive/15'
+                                            : 'text-muted-foreground hover:text-foreground border border-transparent'
+                                    }`}
                                 >
-                                    Borrowed
+                                    Borrowed (You Owe)
                                 </button>
                             </>
                         )}
                     </div>
 
                     {/* Amount */}
-                    <div className="space-y-2">
-                        <Label>Amount *</Label>
+                    <div className="space-y-1.5">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Amount *</Label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₹</span>
                             <Input
                                 type="number"
-                                placeholder="0"
+                                placeholder="0.00"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="pl-8 text-xl font-semibold h-12"
+                                className="pl-8 text-base font-black h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl"
                                 autoFocus
+                                required
                             />
                         </div>
                     </div>
 
                     {/* Person Selection */}
                     <div className="space-y-2">
-                        <Label>Person *</Label>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Person *</Label>
+                            <span className="text-[9px] font-semibold text-muted-foreground/80">Select account target</span>
+                        </div>
 
                         {existingPeople.length > 0 && !showNewPerson && (
-                            <div className="flex flex-wrap gap-2 mb-2">
+                            <div className="flex flex-wrap gap-2.5 p-3 rounded-xl border border-border bg-black/[0.01]">
                                 {existingPeople.map((p) => (
                                     <button
                                         key={p}
                                         type="button"
                                         onClick={() => setPerson(p)}
-                                        className={`px-3 py-1.5 rounded-full text-sm transition-all ${person === p
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-accent/50 text-foreground hover:bg-accent'
-                                            }`}
+                                        className={`pill text-[10px] font-bold ${person === p ? 'selected' : ''}`}
                                     >
-                                        {person === p && <Check className="inline h-3 w-3 mr-1" />}
+                                        {person === p && <Check className="h-3 w-3 mr-1" />}
                                         {p}
                                     </button>
                                 ))}
@@ -248,10 +244,10 @@ export function AddLendingDialog({
                                         setShowNewPerson(true);
                                         setPerson('');
                                     }}
-                                    className="px-3 py-1.5 rounded-full text-sm bg-transparent border border-dashed border-muted-foreground/50 text-muted-foreground hover:border-primary hover:text-primary transition-all"
+                                    className="pill add-new text-[10px]"
                                 >
-                                    <Plus className="inline h-3 w-3 mr-1" />
-                                    New
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Add New Person
                                 </button>
                             </div>
                         )}
@@ -262,6 +258,8 @@ export function AddLendingDialog({
                                     placeholder="Enter person's name"
                                     value={newPerson}
                                     onChange={(e) => setNewPerson(e.target.value)}
+                                    className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
+                                    required
                                 />
                                 {existingPeople.length > 0 && (
                                     <button
@@ -270,9 +268,9 @@ export function AddLendingDialog({
                                             setShowNewPerson(false);
                                             setNewPerson('');
                                         }}
-                                        className="text-xs text-muted-foreground hover:text-foreground"
+                                        className="text-[9px] font-bold text-primary hover:underline"
                                     >
-                                        ← Select existing person
+                                        ← Select from existing contacts
                                     </button>
                                 )}
                             </div>
@@ -280,36 +278,39 @@ export function AddLendingDialog({
                     </div>
 
                     {/* Note */}
-                    <div className="space-y-2">
-                        <Label>Note <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <div className="space-y-1.5">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Note <span className="text-muted-foreground/60 text-[9px] font-semibold">(optional)</span></Label>
                         <Input
-                            placeholder="What's this for?"
+                            placeholder="Add brief details/description..."
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
+                            className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
                         />
                     </div>
-                </div>
 
-                {/* Actions */}
-                <div className="p-4 pt-0 flex gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={handleClose}
-                        className="flex-1"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleSubmit}
-                        disabled={!isValid}
-                        className={`flex-1 ${isEmerald
-                                ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                                : 'bg-rose-500 hover:bg-rose-600 text-white'
+                    {/* Actions */}
+                    <div className="pt-2 flex gap-3">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleClose}
+                            className="flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl bg-muted border-border hover:bg-accent"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={!isValid}
+                            className={`flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md active:scale-98 transition-all ${
+                                isEmerald
+                                    ? 'cash-in-gradient hover:opacity-95 shadow-primary/10'
+                                    : 'cash-out-gradient hover:opacity-95 shadow-destructive/10'
                             }`}
-                    >
-                        Record
-                    </Button>
-                </div>
+                        >
+                            Record Lending
+                        </Button>
+                    </div>
+                </form>
             </DialogContent>
         </Dialog>
     );
