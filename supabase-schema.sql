@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS ledgers (
 -- Index for faster user queries
 CREATE INDEX IF NOT EXISTS idx_ledgers_user_id ON ledgers(user_id);
 
+-- Prevent duplicate LENDINGS ledgers per user (the Telegram bot's
+-- get-or-create + re-link/restore flows can otherwise race and create two).
+-- Partial index so normal ledgers can still share a name.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ledgers_user_lendings
+    ON ledgers(user_id)
+    WHERE name = 'LENDINGS';
+
 -- ============================================
 -- TRANSACTIONS TABLE
 -- ============================================

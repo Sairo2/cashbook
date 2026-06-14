@@ -5,8 +5,8 @@ import { Book, Plus, ChevronRight, Wallet, Send } from 'lucide-react';
 import { Ledger } from '@/lib/supabase';
 import { getLedgers, createLedger } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { AddLedgerDialog } from './AddLedgerDialog';
-import { TelegramLinkCard } from './TelegramLinkCard';
+import { AddLedgerDialog } from '@/components/features/ledgers/AddLedgerDialog';
+import { TelegramLinkCard } from '@/components/features/lendings/TelegramLinkCard';
 
 const LENDINGS_LEDGER_NAME = 'LENDINGS';
 
@@ -68,7 +68,8 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                 <Button
                     onClick={() => setIsDialogOpen(true)}
                     size="icon"
-                    className="h-10 w-10 rounded-full bg-foreground text-background hover:bg-foreground/90 active:scale-95 transition-transform shadow-lg shadow-black/10"
+                    variant="outline"
+                    className="h-10 w-10 rounded-xl border-primary/20 bg-card/80 text-primary hover:bg-accent/70 active:scale-95 transition-transform shadow-[0_8px_20px_rgba(41,35,26,0.06)]"
                     aria-label="Create new ledger"
                 >
                     <Plus className="h-5 w-5" />
@@ -116,7 +117,8 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                             </p>
                             <Button
                                 onClick={() => setIsDialogOpen(true)}
-                                className="bg-foreground text-background hover:bg-foreground/90 active:scale-95 transition-all px-5 py-2.5 rounded-full font-bold"
+                                variant="outline"
+                                className="border-primary/20 bg-card/80 px-5 py-2.5 font-bold text-primary hover:bg-accent/70 active:scale-95 transition-all rounded-xl"
                             >
                                 <Plus className="mr-2 h-4 w-4" />
                                 Create Your First Ledger
@@ -166,7 +168,8 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
                 <div className="fixed bottom-6 right-4 left-4 max-w-[448px] mx-auto z-40">
                     <Button
                         onClick={() => setIsDialogOpen(true)}
-                        className="w-full h-12 text-sm font-bold bg-foreground text-background hover:bg-foreground/90 active:scale-[0.98] transition-all shadow-xl shadow-black/10 rounded-full"
+                        variant="outline"
+                        className="w-full h-12 text-sm font-bold border-primary/20 bg-card/92 text-primary hover:bg-accent/70 active:scale-[0.98] transition-all shadow-[0_12px_26px_rgba(41,35,26,0.08)] rounded-xl backdrop-blur"
                     >
                         <Plus className="mr-1.5 h-5 w-5" />
                         Add Ledger

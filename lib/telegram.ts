@@ -1,10 +1,14 @@
-import { createClient } from '@supabase/supabase-js';
-import { createLedger, getLedgers, createTransaction } from './store';
 import { Ledger } from './supabase';
+import {
+    supabaseAdmin,
+    getLedgersForUser,
+    createLedgerForUser,
+    createTransactionForUser,
+} from './server/db';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Telegram runs server-side only; use the service-role client and the
+// ownership-enforcing data layer (all calls are scoped to the linked user).
+const supabase = supabaseAdmin;
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const LENDINGS_LEDGER_NAME = 'LENDINGS';
@@ -294,7 +298,7 @@ export async function getLinkedUser(telegramChatId: string): Promise<TelegramLin
         .from('telegram_links')
         .select('*')
         .eq('telegram_chat_id', telegramChatId)
-        .single();
+        .maybeSingle();
 
     if (error || !data) return null;
     return data;
@@ -308,7 +312,7 @@ export async function getTelegramLinkStatus(userId: string): Promise<TelegramLin
         .from('telegram_links')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
     if (error || !data) return null;
     return data;
@@ -332,7 +336,7 @@ export async function unlinkTelegramAccount(userId: string): Promise<boolean> {
  * Get or create the LENDINGS ledger for a user
  */
 export async function getOrCreateLendingsLedger(userId: string): Promise<Ledger | null> {
-    const ledgers = await getLedgers(userId);
+    const ledgers = await getLedgersForUser(userId);
     const existingLedger = ledgers.find(l => l.name === LENDINGS_LEDGER_NAME);
 
     if (existingLedger) {
@@ -340,11 +344,11 @@ export async function getOrCreateLendingsLedger(userId: string): Promise<Ledger 
     }
 
     // Create new LENDINGS ledger
-    const newLedger = await createLedger(
+    const newLedger = await createLedgerForUser(
+        userId,
         LENDINGS_LEDGER_NAME,
         LENDINGS_CATEGORIES,
-        LENDINGS_PAYMENT_MODES,
-        userId
+        LENDINGS_PAYMENT_MODES
     );
 
     return newLedger;
@@ -406,7 +410,7 @@ export function parseLendingMessage(message: string): ParsedLending | null {
         case 'paid':
             intent = 'repaid';
             break;
-        default:
+        default: {
             // Legacy format: "500 john tomorrow" → treat as lent
             const amount = parseAmount(parts[0]);
             if (amount) {
@@ -428,6 +432,7 @@ export function parseLendingMessage(message: string): ParsedLending | null {
                 };
             }
             return null;
+        }
     }
 
     // Format: keyword person amount [due_date]
@@ -580,12 +585,35 @@ function capitalizeFirst(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
-async function applyRepaymentToLendingRecords(personName: string, amount: number): Promise<void> {
+async function applyRepaymentToLendingRecords(
+    personName: string,
+    amount: number,
+    ledgerId: string
+): Promise<void> {
+    // Scope lending records to THIS user's LENDINGS ledger. Without this, a
+    // repayment for "John" would match and mutate lending rows belonging to
+    // every other user who also has a borrower named "John".
+    const { data: ledgerTransactions, error: ledgerTransactionsError } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('ledger_id', ledgerId);
+
+    if (ledgerTransactionsError) {
+        console.error('Error fetching ledger transactions for repayment:', ledgerTransactionsError);
+        return;
+    }
+
+    const transactionIds = (ledgerTransactions || []).map(transaction => transaction.id);
+    if (transactionIds.length === 0) {
+        return;
+    }
+
     const { data: pendingLendings, error } = await supabase
         .from('lendings')
         .select('id, remaining_amount')
         .eq('borrower_name', personName)
         .neq('status', 'settled')
+        .in('transaction_id', transactionIds)
         .order('created_at', { ascending: true });
 
     if (error) {
@@ -668,7 +696,7 @@ export async function createLendingFromMessage(
         const config = intentConfig[parsed.intent];
 
         // Create the transaction
-        const transaction = await createTransaction({
+        const transaction = await createTransactionForUser(userId, {
             title: `${config.titlePrefix} ${parsed.personName}`,
             amount: parsed.amount,
             type: config.type,
@@ -702,7 +730,7 @@ export async function createLendingFromMessage(
         }
 
         if (parsed.intent === 'received' || parsed.intent === 'repaid') {
-            await applyRepaymentToLendingRecords(parsed.personName, parsed.amount);
+            await applyRepaymentToLendingRecords(parsed.personName, parsed.amount, ledger.id);
         }
 
         // Format success message

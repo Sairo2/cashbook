@@ -1,4 +1,4 @@
-import { PieChartDemo, PieChartDemoSimple } from "@/components/PieChartDemo"
+import { PieChartDemo, PieChartDemoSimple } from "@/components/features/demos/PieChartDemo"
 
 export default function ChartsPage() {
   return (

@@ -37,7 +37,7 @@ import {
 import { Transaction, Ledger } from '@/lib/supabase';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { deleteTransaction, updateTransaction } from '@/lib/store';
-import { EditTransactionDialog } from './EditTransactionDialog';
+import { EditTransactionDialog } from '@/components/features/ledgers/EditTransactionDialog';
 
 interface TransactionDetailDialogProps {
     transaction: Transaction | null;

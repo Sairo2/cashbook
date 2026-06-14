@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Button } from './ui/button';
+import { Button } from '@/components/ui/button';
 import { Send, Link2, Unlink, Copy, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -151,7 +151,7 @@ export function TelegramLinkCard({ className, onLinked }: TelegramLinkCardProps)
                 <div className={cn(
                     "w-8 h-8 rounded-xl flex items-center justify-center border",
                     isLinked
-                        ? "bg-primary text-primary-foreground border-primary"
+                        ? "bg-accent/70 text-primary border-primary/20"
                         : "bg-muted border-border text-primary"
                 )}>
                     <Send className="w-3.5 h-3.5" />

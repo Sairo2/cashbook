@@ -72,7 +72,7 @@ export function LoginPage() {
                                 <p className="text-[10px] font-bold text-muted-foreground">Today</p>
                                 <p className="text-sm font-black text-foreground lg:text-base">Lending snapshot</p>
                             </div>
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground lg:h-11 lg:w-11">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/20 bg-accent/70 text-primary lg:h-11 lg:w-11">
                                 <Send className="h-4 w-4 lg:h-5 lg:w-5" />
                             </div>
                         </div>

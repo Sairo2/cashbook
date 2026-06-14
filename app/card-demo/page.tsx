@@ -7,7 +7,7 @@ import {
   InnerCardDemo,
   LiftedCardDemo,
   CornersCardDemo,
-} from "@/components/CardDemo";
+} from "@/components/features/demos/CardDemo";
 
 export default function CardDemoPage() {
   return (

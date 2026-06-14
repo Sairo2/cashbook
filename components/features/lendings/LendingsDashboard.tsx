@@ -62,9 +62,9 @@ import {
     getLendingContacts,
     upsertLendingContact,
 } from '@/lib/store';
-import { AddLendingDialog } from './AddLendingDialog';
-import { EditLendingDialog } from './EditLendingDialog';
-import { AddLedgerDialog } from './AddLedgerDialog';
+import { AddLendingDialog } from '@/components/features/lendings/AddLendingDialog';
+import { EditLendingDialog } from '@/components/features/lendings/EditLendingDialog';
+import { AddLedgerDialog } from '@/components/features/ledgers/AddLedgerDialog';
 import { exportLedgerToPDF } from '@/lib/export-pdf';
 
 interface LendingsDashboardProps {
@@ -491,13 +491,13 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                     <div className="flex items-center gap-3">
                         <button
                             onClick={onBack}
-                            className="p-2 -ml-2 rounded-full hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground"
+                            className="p-2 -ml-2 rounded-xl hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground"
                             aria-label="Go back"
                         >
                             <ArrowLeft className="h-5 w-5" />
                         </button>
                         <div className="flex items-center gap-2">
-                            <div className="p-1.5 rounded-xl bg-primary text-primary-foreground border border-primary">
+                            <div className="rounded-xl border border-primary/20 bg-accent/70 p-1.5 text-primary">
                                 <Send className="h-4 w-4" />
                             </div>
                             <div className="min-w-0">
@@ -512,7 +512,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                     {/* Ellipsis Menu */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="p-2 -mr-2 rounded-full hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground" aria-label="Menu">
+                            <button className="p-2 -mr-2 rounded-xl hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground" aria-label="Menu">
                                 <MoreVertical className="h-5 w-5" />
                             </button>
                         </DropdownMenuTrigger>
@@ -929,7 +929,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                             onClick={() => handleShareMethod('sms')}
                             className="rounded-2xl border border-border bg-background/60 p-4 text-left transition-all hover:border-primary/30 hover:bg-accent active:scale-[0.98]"
                         >
-                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background">
+                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card/80 text-muted-foreground">
                                 <MessageSquare className="h-5 w-5" />
                             </div>
                             <p className="text-sm font-black text-foreground">SMS</p>
@@ -941,7 +941,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                             onClick={() => handleShareMethod('whatsapp')}
                             className="rounded-2xl border border-border bg-background/60 p-4 text-left transition-all hover:border-primary/30 hover:bg-accent active:scale-[0.98]"
                         >
-                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-accent/70 text-primary">
                                 <MessageCircle className="h-5 w-5" />
                             </div>
                             <p className="text-sm font-black text-foreground">WhatsApp</p>
@@ -995,7 +995,8 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                             </Button>
                             <Button
                                 type="submit"
-                                className="h-11 flex-1 rounded-full bg-foreground text-background hover:bg-foreground/90"
+                                variant="outline"
+                                className="h-11 flex-1 rounded-xl border-primary/20 bg-card/80 text-primary hover:bg-accent/70"
                             >
                                 Save & Share
                             </Button>

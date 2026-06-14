@@ -24,7 +24,7 @@ export function BadgeTag({ label, active = false, className }: BadgeTagProps) {
         className={cn(
           "rounded-2xl px-3 py-1 text-[10px] font-bold",
           active
-            ? "bg-primary text-primary-foreground"
+            ? "border border-primary/20 bg-accent text-primary"
             : "bg-white border border-gray-500/30"
         )}
       >

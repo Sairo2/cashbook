@@ -39,10 +39,10 @@ import {
 import { Transaction, TransactionType, Ledger } from '@/lib/supabase';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { getTransactionsByLedger, createTransaction, updateLedger, deleteLedger } from '@/lib/store';
-import { AddTransactionDialog } from './AddTransactionDialog';
-import { SummaryCharts } from './SummaryCharts';
-import { AddLedgerDialog } from './AddLedgerDialog';
-import { TransactionDetailDialog } from './TransactionDetailDialog';
+import { AddTransactionDialog } from '@/components/features/ledgers/AddTransactionDialog';
+import { SummaryCharts } from '@/components/features/ledgers/SummaryCharts';
+import { AddLedgerDialog } from '@/components/features/ledgers/AddLedgerDialog';
+import { TransactionDetailDialog } from '@/components/features/ledgers/TransactionDetailDialog';
 import { exportLedgerToPDF } from '@/lib/export-pdf';
 
 interface LedgerDashboardProps {
@@ -175,7 +175,7 @@ export function LedgerDashboard({ ledger, onBack, onLedgerUpdated, onLedgerDelet
                     <div className="flex items-center gap-3">
                         <button
                             onClick={onBack}
-                            className="p-2 -ml-2 rounded-full hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground"
+                            className="p-2 -ml-2 rounded-xl hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground"
                             aria-label="Go back to dashboard"
                         >
                             <ArrowLeft className="h-5 w-5" />
@@ -191,7 +191,7 @@ export function LedgerDashboard({ ledger, onBack, onLedgerUpdated, onLedgerDelet
                     {/* Ellipsis Menu */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <button className="p-2 -mr-2 rounded-full hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground" aria-label="More actions">
+                            <button className="p-2 -mr-2 rounded-xl hover:bg-card active:scale-95 transition-all text-muted-foreground hover:text-foreground" aria-label="More actions">
                                 <MoreVertical className="h-5 w-5" />
                             </button>
                         </DropdownMenuTrigger>
