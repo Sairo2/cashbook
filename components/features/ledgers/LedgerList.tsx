@@ -57,10 +57,7 @@ export function LedgerList({ onSelectLedger, userId }: LedgerListProps) {
         <div className="min-h-screen pb-32 page-enter">
             <header className="px-4 pt-8 pb-6 flex items-end justify-between">
                 <div>
-                    <div className="mb-2 flex items-center gap-2 text-[11px] font-bold text-primary">
-                        <Wallet className="h-3.5 w-3.5" />
-                        <span>{regularLedgers.length} ledger{regularLedgers.length === 1 ? '' : 's'}</span>
-                    </div>
+                    
                     <h1 className="font-display text-[2.25rem] leading-none text-foreground">
                         My Ledgers
                     </h1>

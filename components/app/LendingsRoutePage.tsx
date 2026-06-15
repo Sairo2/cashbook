@@ -58,9 +58,9 @@ export function LendingsRoutePage() {
                     actionLabel="Back to ledgers"
                     onAction={() => router.push('/')}
                 >
-                    <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-accent/70 text-primary">
+                    {/* <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl border border-primary/20 bg-accent/70 text-primary">
                         <Send className="h-5 w-5" />
-                    </div>
+                    </div> */}
                     <div className="mb-6">
                         <TelegramLinkCard onLinked={loadLendingsLedger} />
                     </div>
