@@ -1,15 +1,42 @@
 import { betterAuth } from "better-auth";
 import { Pool } from "pg";
 
+function withHttps(url: string | undefined): string | null {
+    if (!url) {
+        return null;
+    }
+
+    return url.startsWith("http") ? url : `https://${url}`;
+}
+
+function getAuthBaseURL(): string {
+    return (
+        withHttps(process.env.BETTER_AUTH_URL) ||
+        withHttps(process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
+        withHttps(process.env.VERCEL_URL) ||
+        "http://localhost:3000"
+    );
+}
+
+const authBaseURL = getAuthBaseURL();
+const trustedOrigins = Array.from(new Set([
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://cashbook-jade.vercel.app",
+    authBaseURL,
+].filter(Boolean)));
+
 // Create pool only on server side
 let pool: Pool | null = null;
 
 function getPool() {
     if (!pool) {
+        const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true';
+
         pool = new Pool({
             connectionString: process.env.DATABASE_URL,
             ssl: {
-                rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'false' ? false : true,
+                rejectUnauthorized,
             },
             max: 5,
         });
@@ -19,8 +46,8 @@ function getPool() {
 
 export const auth = betterAuth({
     database: getPool(),
-    trustedOrigins: ["http://localhost:3000", "http://localhost:3001", "https://cashbook-jade.vercel.app"],
-    baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    trustedOrigins,
+    baseURL: authBaseURL,
     secret: process.env.BETTER_AUTH_SECRET,
     emailAndPassword: {
         enabled: false,

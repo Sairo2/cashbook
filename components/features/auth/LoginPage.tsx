@@ -31,23 +31,40 @@ function GoogleMark() {
 
 export function LoginPage() {
     const [isLoading, setIsLoading] = React.useState(false);
+    const [signInError, setSignInError] = React.useState('');
 
     const handleGoogleSignIn = async () => {
         setIsLoading(true);
+        setSignInError('');
 
         const safetyTimer = window.setTimeout(() => {
             setIsLoading(false);
         }, 8000);
 
         try {
-            await signIn.social({
+            const origin = window.location.origin;
+            const result = await signIn.social({
                 provider: 'google',
-                callbackURL: '/',
-            });
+                callbackURL: `${origin}/`,
+                errorCallbackURL: `${origin}/`,
+                disableRedirect: true,
+            } as Parameters<typeof signIn.social>[0] & { disableRedirect: boolean });
+
+            if (result?.error) {
+                throw new Error(result.error.message || 'Google sign-in failed.');
+            }
+
+            if (result?.data?.url) {
+                window.location.assign(result.data.url);
+                return;
+            }
+
+            throw new Error('Google did not return a sign-in URL.');
         } catch (error) {
             console.error('Sign in error:', error);
             setIsLoading(false);
             window.clearTimeout(safetyTimer);
+            setSignInError(error instanceof Error ? error.message : 'Google sign-in failed. Please try again.');
         }
     };
 
@@ -63,6 +80,7 @@ export function LoginPage() {
                     primaryLabel="Continue with Google"
                     loadingLabel="Opening Google..."
                     primaryIcon={<GoogleMark />}
+                    errorMessage={signInError}
                 />
 
                 <div className="hidden lg:pointer-events-auto lg:static lg:mx-0 lg:block lg:max-w-none">

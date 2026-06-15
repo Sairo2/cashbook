@@ -13,6 +13,7 @@ interface AnimatedHeroProps {
     primaryLabel?: string;
     loadingLabel?: string;
     primaryIcon?: React.ReactNode;
+    errorMessage?: string;
 }
 
 const rotatingWords = ['lendings', 'expenses', 'settlements', 'cashflow'];
@@ -24,6 +25,7 @@ export function AnimatedHero({
     primaryLabel = 'Continue',
     loadingLabel = 'Connecting...',
     primaryIcon,
+    errorMessage,
 }: AnimatedHeroProps) {
     const [titleNumber, setTitleNumber] = React.useState(0);
     const activeWord = rotatingWords[titleNumber];
@@ -81,7 +83,11 @@ export function AnimatedHero({
                         {isLoading ? loadingLabel : primaryLabel}
                     </Button>
 
-                 
+                    {errorMessage && (
+                        <p className="rounded-xl border border-destructive/20 bg-[#fae4df]/70 px-4 py-3 text-center text-xs font-semibold leading-5 text-destructive">
+                            {errorMessage}
+                        </p>
+                    )}
                 </div>
             </motion.div>
         </section>
