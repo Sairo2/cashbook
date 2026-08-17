@@ -547,7 +547,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
     };
 
     return (
-        <div className="min-h-screen pb-32 page-enter">
+        <div className="min-h-screen pb-44 page-enter">
             {/* Header */}
             <div className="sticky top-0 z-30 bg-background/82 backdrop-blur-xl border-b border-border/70">
                 <div className="px-4 py-3 flex items-center justify-between">
@@ -775,7 +775,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
             </div>
 
             {/* Fixed Action Buttons */}
-            <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] z-30">
+            <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2">
                 <div className="px-4 pb-5 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
                     <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-border bg-card/92 p-1.5 shadow-[0_1px_0_rgba(255,255,255,0.86)_inset,0_18px_40px_rgba(41,35,26,0.16)] backdrop-blur-xl">
                         <Button

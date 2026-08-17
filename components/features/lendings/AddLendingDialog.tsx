@@ -118,7 +118,7 @@ export function AddLendingDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="flex max-h-[85vh] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-2xl border-border p-0 surface-card-elevated sm:max-w-md">
+            <DialogContent className="flex h-[85vh] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-2xl border-border p-0 surface-card-elevated sm:max-w-md">
                 <DialogHeader className={`mx-5 mt-5 shrink-0 rounded-xl border p-4 ${
                     isEmerald 
                         ? 'bg-primary/[0.05] border-primary/20' 
