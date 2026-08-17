@@ -37,6 +37,9 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 # Telegram Bot Configuration (for LENDINGS feature)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=YourBotUsername
+
+# Protects the weekly Vercel database keep-alive endpoint
+CRON_SECRET=use_a_random_secret_with_at_least_16_characters
 ```
 
 ### 3. Set up the database
@@ -117,3 +120,6 @@ The easiest way to deploy is using [Vercel](https://vercel.com/new):
 
 Don't forget to set up the Telegram webhook after deployment.
 
+The included Vercel Cron runs a small authenticated Supabase query every Monday.
+Add the same `CRON_SECRET` value to the Vercel project environment variables;
+Vercel automatically sends it as a bearer token when invoking the cron route.
