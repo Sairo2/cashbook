@@ -39,6 +39,8 @@ interface EditLendingDialogProps {
     ledger: Ledger;
     onTransactionUpdated: (transaction: Transaction) => void;
     onTransactionDeleted: (transactionId: string) => void;
+    onSettleRecord?: (transaction: Transaction) => Promise<boolean>;
+    isRecordSettled?: boolean;
     existingPeople?: string[];
 }
 
@@ -48,6 +50,8 @@ export function EditLendingDialog({
     transaction,
     onTransactionUpdated,
     onTransactionDeleted,
+    onSettleRecord,
+    isRecordSettled = false,
     existingPeople = [],
 }: EditLendingDialogProps) {
     const [amount, setAmount] = React.useState('');
@@ -59,6 +63,8 @@ export function EditLendingDialog({
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isSaving, setIsSaving] = React.useState(false);
+    const [isSettleDialogOpen, setIsSettleDialogOpen] = React.useState(false);
+    const [isSettlingRecord, setIsSettlingRecord] = React.useState(false);
 
     // Initialize form when transaction changes
     React.useEffect(() => {
@@ -160,6 +166,19 @@ export function EditLendingDialog({
         setIsDeleting(false);
     };
 
+    const handleSettleRecord = async () => {
+        if (!transaction || !onSettleRecord) return;
+
+        setIsSettlingRecord(true);
+        const settled = await onSettleRecord(transaction);
+        setIsSettlingRecord(false);
+
+        if (settled) {
+            setIsSettleDialogOpen(false);
+            handleClose();
+        }
+    };
+
     const handleClose = () => {
         setAmount('');
         setPerson('');
@@ -171,14 +190,15 @@ export function EditLendingDialog({
 
     const parsedAmount = parseFloat(amount);
     const isValid = !isNaN(parsedAmount) && parsedAmount > 0 && (showNewPerson ? newPerson.trim() : person);
+    const canSettleRecord = transaction?.type === 'cash_out' && !transaction.category.toLowerCase().includes('repay');
 
     if (!transaction) return null;
 
     return (
         <>
             <Dialog open={isOpen} onOpenChange={handleClose}>
-                <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5 gap-0">
-                    <DialogHeader className={`p-4 rounded-xl border mb-5 ${
+                <DialogContent className="flex max-h-[85vh] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-2xl border-border p-0 surface-card-elevated sm:max-w-md">
+                    <DialogHeader className={`mx-5 mt-5 shrink-0 rounded-xl border p-4 ${
                         isEmerald 
                             ? 'bg-primary/[0.05] border-primary/20' 
                             : 'bg-destructive/[0.05] border-destructive/20'
@@ -196,15 +216,30 @@ export function EditLendingDialog({
                                 )}
                             </div>
                             <div className="space-y-0.5">
-                                <span className="text-sm font-bold tracking-tight text-foreground uppercase">Edit Debt Record</span>
-                                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                <span className="text-base font-semibold tracking-tight text-foreground">Edit record</span>
+                                <p className="text-xs text-muted-foreground">
                                     {currentIntent.subtitle}
                                 </p>
                             </div>
                         </DialogTitle>
                     </DialogHeader>
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    {canSettleRecord && (
+                        <div className="mx-5 mt-3 shrink-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsSettleDialogOpen(true)}
+                                disabled={isRecordSettled}
+                                className="h-11 w-full rounded-xl border-primary/25 bg-primary/5 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/10 disabled:opacity-100"
+                            >
+                                {isRecordSettled ? 'This record is settled' : 'Mark this record as received'}
+                            </Button>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
                         {/* Intent Toggle */}
                         <div className="space-y-1.5">
                             <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Transaction Category</Label>
@@ -318,8 +353,9 @@ export function EditLendingDialog({
                             />
                         </div>
 
-                        {/* Actions */}
-                        <div className="pt-2 flex gap-2">
+                        </div>
+
+                        <div className="flex shrink-0 gap-2 border-t border-border bg-background/95 px-5 py-4 backdrop-blur">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -370,6 +406,27 @@ export function EditLendingDialog({
                             className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs py-2 rounded-xl shadow-md active:scale-98"
                         >
                             {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={isSettleDialogOpen} onOpenChange={setIsSettleDialogOpen}>
+                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-base font-bold">Mark this record as received?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                            This adds a ₹{transaction.amount.toLocaleString('en-IN')} repayment from {transaction.person || 'this person'} and settles only this lending record.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex-row gap-2 sm:gap-0 mt-3">
+                        <AlertDialogCancel className="flex-1 mt-0 text-xs py-2 rounded-xl bg-muted border-border hover:bg-accent">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleSettleRecord}
+                            disabled={isSettlingRecord}
+                            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 text-xs py-2 rounded-xl shadow-md active:scale-98"
+                        >
+                            {isSettlingRecord ? 'Saving...' : 'Mark as Received'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

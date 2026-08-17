@@ -26,6 +26,8 @@ export interface Transaction {
     payment_mode?: string;
     person?: string;
     ledger_id: string;
+    // Present on a repayment that was created by settling a specific lending record.
+    settles_transaction_id?: string;
 }
 
 export interface LendingContact {

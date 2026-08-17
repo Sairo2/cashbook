@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Ledger } from '@/lib/supabase';
 import { getLedgers } from '@/lib/store';

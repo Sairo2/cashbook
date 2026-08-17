@@ -118,8 +118,8 @@ export function AddLendingDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="max-w-[92vw] sm:max-w-md max-h-[85vh] overflow-y-auto surface-card-elevated border-border rounded-2xl p-5 gap-0">
-                <DialogHeader className={`p-4 rounded-xl border mb-5 ${
+            <DialogContent className="flex max-h-[85vh] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-2xl border-border p-0 surface-card-elevated sm:max-w-md">
+                <DialogHeader className={`mx-5 mt-5 shrink-0 rounded-xl border p-4 ${
                     isEmerald 
                         ? 'bg-primary/[0.05] border-primary/20' 
                         : 'bg-destructive/[0.05] border-destructive/20'
@@ -137,15 +137,16 @@ export function AddLendingDialog({
                             )}
                         </div>
                         <div className="space-y-0.5">
-                            <span className="text-sm font-bold tracking-tight text-foreground uppercase">{currentIntent.title}</span>
-                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            <span className="text-base font-semibold tracking-tight text-foreground">{currentIntent.title}</span>
+                            <p className="text-xs text-muted-foreground">
                                 {currentIntent.subtitle}
                             </p>
                         </div>
                     </DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
                     {/* Intent Toggle */}
                     <div className="flex bg-black/[0.02] border border-border rounded-xl p-0.5">
                         {isGave ? (
@@ -288,8 +289,10 @@ export function AddLendingDialog({
                         />
                     </div>
 
-                    {/* Actions */}
-                    <div className="pt-2 flex gap-3">
+                    </div>
+
+                    {/* Docked actions stay visible while the form scrolls. */}
+                    <div className="flex shrink-0 gap-3 border-t border-border bg-background/95 px-5 py-4 backdrop-blur">
                         <Button
                             type="button"
                             variant="outline"

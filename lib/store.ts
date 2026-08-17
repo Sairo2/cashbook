@@ -77,6 +77,24 @@ function saveLocalLendingContact(
     return contact;
 }
 
+function mergeLendingContacts(
+    remoteContacts: LendingContact[],
+    localContacts: LendingContact[]
+): LendingContact[] {
+    const contactsByPerson = new Map<string, LendingContact>();
+
+    remoteContacts.forEach(contact => {
+        contactsByPerson.set(contact.person_name.toLowerCase(), contact);
+    });
+    // Prefer the local value. It is written immediately when a user saves a
+    // number, including while the database is unavailable.
+    localContacts.forEach(contact => {
+        contactsByPerson.set(contact.person_name.toLowerCase(), contact);
+    });
+
+    return Array.from(contactsByPerson.values());
+}
+
 // ============ LEDGER OPERATIONS ============
 
 export async function getLedgers(_userId: string): Promise<Ledger[]> {
@@ -163,10 +181,8 @@ export async function getLendingContacts(
         `/api/contacts?ledgerId=${encodeURIComponent(ledgerId)}`
     );
 
-    if (contacts === null) {
-        return getLocalLendingContacts(userId, ledgerId);
-    }
-    return contacts;
+    const localContacts = getLocalLendingContacts(userId, ledgerId);
+    return mergeLendingContacts(contacts || [], localContacts);
 }
 
 export async function upsertLendingContact(
@@ -175,13 +191,11 @@ export async function upsertLendingContact(
     personName: string,
     phoneNumber: string
 ): Promise<LendingContact | null> {
+    const localContact = saveLocalLendingContact(userId, ledgerId, personName, phoneNumber);
     const contact = await fetchJson<LendingContact>('/api/contacts', {
         method: 'POST',
         body: JSON.stringify({ ledgerId, personName, phoneNumber }),
     });
 
-    if (contact === null) {
-        return saveLocalLendingContact(userId, ledgerId, personName, phoneNumber);
-    }
-    return contact;
+    return contact || localContact;
 }

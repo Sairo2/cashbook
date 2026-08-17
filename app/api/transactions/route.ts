@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
         category: body.category,
         payment_mode: typeof body.payment_mode === 'string' ? body.payment_mode : undefined,
         person: typeof body.person === 'string' ? body.person : undefined,
+        settles_transaction_id: typeof body.settles_transaction_id === 'string'
+            ? body.settles_transaction_id
+            : undefined,
     });
 
     if (!transaction) {

@@ -13,6 +13,7 @@ import {
     Trash2,
     Download,
     ChevronRight,
+    CheckCircle2,
     MessageCircle,
     Users,
     TrendingUp,
@@ -173,6 +174,8 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
     const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
+    const [isSettlementDialogOpen, setIsSettlementDialogOpen] = React.useState(false);
+    const [isSettling, setIsSettling] = React.useState(false);
 
     // Person detail state
     const [selectedPerson, setSelectedPerson] = React.useState<PersonBalance | null>(null);
@@ -234,6 +237,55 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
             setTransactions(prev => [newTransaction, ...prev]);
         }
     };
+
+    const handleMarkAsReceived = async () => {
+        if (!selectedPerson || selectedPerson.balance <= 0) return;
+
+        setIsSettling(true);
+        try {
+            const settlement = await createTransaction({
+                ledger_id: currentLedger.id,
+                type: 'cash_in',
+                amount: selectedPerson.balance,
+                title: `Settlement received from ${selectedPerson.name}`,
+                category: 'Repayment',
+                payment_mode: 'Cash',
+                person: selectedPerson.name,
+            });
+
+            if (settlement) {
+                setTransactions(prev => [settlement, ...prev]);
+                setIsSettlementDialogOpen(false);
+            }
+        } finally {
+            setIsSettling(false);
+        }
+    };
+
+    const handleSettleRecord = async (record: Transaction): Promise<boolean> => {
+        const settlement = await createTransaction({
+            ledger_id: currentLedger.id,
+            type: 'cash_in',
+            amount: record.amount,
+            title: `Settlement received for ${record.title}`,
+            category: 'Repayment',
+            payment_mode: 'Cash',
+            person: record.person,
+            settles_transaction_id: record.id,
+        });
+
+        if (!settlement) return false;
+
+        setTransactions(prev => [settlement, ...prev]);
+        return true;
+    };
+
+    const settledRecordIds = React.useMemo(
+        () => new Set(transactions.flatMap(transaction =>
+            transaction.settles_transaction_id ? [transaction.settles_transaction_id] : []
+        )),
+        [transactions]
+    );
 
     const openAddDialog = (direction: 'gave' | 'got') => {
         setDialogDirection(direction);
@@ -882,6 +934,17 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                                     <MessageCircle className="h-3.5 w-3.5" />
                                     Remind on WhatsApp
                                 </Button>
+
+                                {selectedPerson.balance > 0 && (
+                                    <Button
+                                        type="button"
+                                        onClick={() => setIsSettlementDialogOpen(true)}
+                                        className="mt-2 h-9 w-full rounded-xl bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
+                                    >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        Mark ₹{selectedPerson.balance.toLocaleString('en-IN')} as received
+                                    </Button>
+                                )}
                             </SheetHeader>
 
                             {/* Transactions List */}
@@ -1018,6 +1081,29 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                 </AlertDialogContent>
             </AlertDialog>
 
+            <AlertDialog open={isSettlementDialogOpen} onOpenChange={setIsSettlementDialogOpen}>
+                <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-base font-bold">Mark as received?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs leading-relaxed text-muted-foreground">
+                            This records ₹{selectedPerson?.balance.toLocaleString('en-IN')} as a cash repayment from {selectedPerson?.name} and settles the current balance.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-3 flex-row gap-2 sm:gap-0">
+                        <AlertDialogCancel className="mt-0 flex-1 rounded-xl border-border bg-muted py-2 text-xs hover:bg-accent">
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleMarkAsReceived}
+                            disabled={isSettling}
+                            className="flex-1 rounded-xl bg-primary py-2 text-xs text-primary-foreground hover:bg-primary/90"
+                        >
+                            {isSettling ? 'Saving...' : 'Mark as Received'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Edit Lending Dialog */}
             <EditLendingDialog
                 transaction={selectedTransaction}
@@ -1029,6 +1115,8 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                 }}
                 onTransactionUpdated={handleTransactionUpdated}
                 onTransactionDeleted={handleTransactionDeleted}
+                onSettleRecord={handleSettleRecord}
+                isRecordSettled={selectedTransaction ? settledRecordIds.has(selectedTransaction.id) : false}
                 existingPeople={existingPeople}
             />
         </div>

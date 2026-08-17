@@ -45,6 +45,14 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_ledger_id ON transactions(ledger_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
 
+-- A repayment can be linked to the exact lending record it settles. The unique
+-- index prevents the same record from being marked received twice.
+ALTER TABLE transactions
+    ADD COLUMN IF NOT EXISTS settles_transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_settles_transaction_id
+    ON transactions(settles_transaction_id)
+    WHERE settles_transaction_id IS NOT NULL;
+
 -- ============================================
 -- TELEGRAM + LENDINGS TABLES
 -- ============================================

@@ -232,6 +232,26 @@ export async function createTransactionForUser(
         return null;
     }
 
+    if (data.settles_transaction_id) {
+        const { data: settledRecord, error: settledRecordError } = await supabaseAdmin
+            .from('transactions')
+            .select('id, ledger_id, type, category, person')
+            .eq('id', data.settles_transaction_id)
+            .maybeSingle();
+
+        if (
+            settledRecordError ||
+            !settledRecord ||
+            settledRecord.ledger_id !== data.ledger_id ||
+            settledRecord.type !== 'cash_out' ||
+            settledRecord.category.toLowerCase().includes('repay') ||
+            settledRecord.person !== data.person ||
+            !(await userOwnsTransaction(userId, settledRecord.id))
+        ) {
+            return null;
+        }
+    }
+
     const { data: newTransaction, error } = await supabaseAdmin
         .from('transactions')
         .insert([data])
