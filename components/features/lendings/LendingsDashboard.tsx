@@ -14,8 +14,6 @@ import {
     Download,
     ChevronRight,
     MessageCircle,
-    MessageSquare,
-    Share2,
     Users,
     TrendingUp,
     TrendingDown,
@@ -84,8 +82,6 @@ interface PersonBalance {
     lastTransactionDate: Date;
 }
 
-type ShareMethod = 'sms' | 'whatsapp';
-
 interface LendingContactInfo {
     phone_number: string;
 }
@@ -104,29 +100,64 @@ function normalizePhoneNumber(phoneNumber: string): string {
     return digits;
 }
 
-function createShareMessage(person: PersonBalance): string {
-    const amount = `Rs ${Math.abs(person.balance).toLocaleString('en-IN')}`;
+function getLatestSettlementCycle(transactions: Transaction[]): Transaction[] {
+    const chronological = [...transactions].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    let currentCycle: Transaction[] = [];
+    let latestSettledCycle: Transaction[] = [];
+    let runningBalance = 0;
 
-    if (person.balance > 0) {
-        return `Hi ${person.name}, quick reminder from CashBook: you owe me ${amount}. I lent Rs ${person.totalLent.toLocaleString('en-IN')} and received Rs ${person.totalReceived.toLocaleString('en-IN')}. Please settle when possible.`;
-    }
+    chronological.forEach(transaction => {
+        currentCycle.push(transaction);
+        runningBalance += transaction.type === 'cash_out' ? transaction.amount : -transaction.amount;
 
-    if (person.balance < 0) {
-        return `Hi ${person.name}, quick note from CashBook: I owe you ${amount}. I borrowed/received Rs ${person.totalReceived.toLocaleString('en-IN')} and repaid Rs ${person.totalLent.toLocaleString('en-IN')}. I will settle this soon.`;
-    }
+        if (Math.abs(runningBalance) < 0.005) {
+            latestSettledCycle = currentCycle;
+            currentCycle = [];
+            runningBalance = 0;
+        }
+    });
 
-    return `Hi ${person.name}, our CashBook lending balance is settled. Thanks!`;
+    return currentCycle.length > 0 ? currentCycle : latestSettledCycle;
 }
 
-function getShareUrl(method: ShareMethod, phoneNumber: string, message: string): string {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    const encodedMessage = encodeURIComponent(message);
+function createReminderMessage(person: PersonBalance): string {
+    const cycle = getLatestSettlementCycle(person.transactions);
+    const totalGave = cycle
+        .filter(transaction => transaction.type === 'cash_out')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalGot = cycle
+        .filter(transaction => transaction.type === 'cash_in')
+        .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const balance = totalGave - totalGot;
+    const entries = cycle.map(transaction => {
+        const action = transaction.type === 'cash_out' ? 'Gave' : 'Got';
+        return `${format(new Date(transaction.created_at), 'dd MMM')}: ${action} Rs ${transaction.amount.toLocaleString('en-IN')} - ${transaction.title}`;
+    });
+    const balanceLine = balance > 0
+        ? `Balance due from you: Rs ${balance.toLocaleString('en-IN')}`
+        : balance < 0
+            ? `Balance due to you: Rs ${Math.abs(balance).toLocaleString('en-IN')}`
+            : 'Balance: Settled';
+    const heading = Math.abs(balance) < 0.005 ? 'Latest settlement summary' : 'Summary since last settlement';
 
-    if (method === 'whatsapp') {
-        return `https://wa.me/${normalizedPhone}?text=${encodedMessage}`;
-    }
+    return [
+        `Hi ${person.name},`,
+        '',
+        `${heading}:`,
+        ...entries,
+        '',
+        `Total gave: Rs ${totalGave.toLocaleString('en-IN')}`,
+        `Total got: Rs ${totalGot.toLocaleString('en-IN')}`,
+        balanceLine,
+        '',
+        'Please check and settle when possible. Thank you.',
+    ].join('\n');
+}
 
-    return `sms:+${normalizedPhone}?&body=${encodedMessage}`;
+function getWhatsAppReminderUrl(phoneNumber: string, message: string): string {
+    return `https://wa.me/${normalizePhoneNumber(phoneNumber)}?text=${encodeURIComponent(message)}`;
 }
 
 export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onLedgerDeleted }: LendingsDashboardProps) {
@@ -154,10 +185,8 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
     const [selectedTransaction, setSelectedTransaction] = React.useState<Transaction | null>(null);
     const [isTransactionDetailOpen, setIsTransactionDetailOpen] = React.useState(false);
 
-    // Share reminder state
-    const [sharePerson, setSharePerson] = React.useState<PersonBalance | null>(null);
-    const [shareMethod, setShareMethod] = React.useState<ShareMethod | null>(null);
-    const [isShareDialogOpen, setIsShareDialogOpen] = React.useState(false);
+    // WhatsApp reminder state
+    const [reminderPerson, setReminderPerson] = React.useState<PersonBalance | null>(null);
     const [isPhoneDialogOpen, setIsPhoneDialogOpen] = React.useState(false);
     const [phoneInput, setPhoneInput] = React.useState('');
     const [phoneError, setPhoneError] = React.useState('');
@@ -316,46 +345,28 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
         return contactsByPerson[personName.toLowerCase()]?.phone_number;
     }, [contactsByPerson]);
 
-    const openSharePicker = (person: PersonBalance) => {
-        setSharePerson(person);
-        setShareMethod(null);
-        setPhoneError('');
-        setIsShareDialogOpen(true);
-    };
-
-    const openShareTarget = React.useCallback((person: PersonBalance, method: ShareMethod, phoneNumber: string) => {
-        const url = getShareUrl(method, phoneNumber, createShareMessage(person));
-
-        if (method === 'whatsapp') {
-            window.open(url, '_blank', 'noopener,noreferrer');
-            return;
-        }
-
-        window.location.href = url;
+    const openWhatsAppReminder = React.useCallback((person: PersonBalance, phoneNumber: string) => {
+        window.location.href = getWhatsAppReminderUrl(phoneNumber, createReminderMessage(person));
     }, []);
 
-    const handleShareMethod = (method: ShareMethod) => {
-        if (!sharePerson) return;
-
-        const savedPhoneNumber = getSavedPhoneNumber(sharePerson.name);
-        setShareMethod(method);
+    const handleRemind = (person: PersonBalance) => {
+        setReminderPerson(person);
+        setPhoneError('');
+        const savedPhoneNumber = getSavedPhoneNumber(person.name);
 
         if (savedPhoneNumber) {
-            setIsShareDialogOpen(false);
-            openShareTarget(sharePerson, method, savedPhoneNumber);
+            openWhatsAppReminder(person, savedPhoneNumber);
             return;
         }
 
         setPhoneInput('');
-        setPhoneError('');
-        setIsShareDialogOpen(false);
         setIsPhoneDialogOpen(true);
     };
 
-    const handleSavePhoneAndShare = async (event: React.FormEvent<HTMLFormElement>) => {
+    const handleSavePhoneAndRemind = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!sharePerson || !shareMethod) return;
+        if (!reminderPerson) return;
 
         const normalizedPhone = normalizePhoneNumber(phoneInput);
 
@@ -367,7 +378,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
         const savedContact = await upsertLendingContact(
             userId,
             currentLedger.id,
-            sharePerson.name,
+            reminderPerson.name,
             normalizedPhone
         );
 
@@ -378,13 +389,13 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
 
         setContactsByPerson(prev => ({
             ...prev,
-            [sharePerson.name.toLowerCase()]: {
+            [reminderPerson.name.toLowerCase()]: {
                 phone_number: normalizedPhone,
             },
         }));
 
         setIsPhoneDialogOpen(false);
-        openShareTarget(sharePerson, shareMethod, normalizedPhone);
+        openWhatsAppReminder(reminderPerson, normalizedPhone);
     };
 
     // Handle transaction click
@@ -864,12 +875,12 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
 
                                 <Button
                                     type="button"
-                                    onClick={() => openSharePicker(selectedPerson)}
+                                    onClick={() => handleRemind(selectedPerson)}
                                     variant="outline"
                                     className="mt-3 h-9 w-full rounded-xl border-border/80 bg-muted/35 text-xs font-medium text-muted-foreground shadow-none hover:bg-muted/55 hover:text-foreground active:scale-[0.98]"
                                 >
-                                    <Share2 className="h-3.5 w-3.5" />
-                                    Share Reminder
+                                    <MessageCircle className="h-3.5 w-3.5" />
+                                    Remind on WhatsApp
                                 </Button>
                             </SheetHeader>
 
@@ -912,57 +923,18 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                 </SheetContent>
             </Sheet>
 
-            <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-                <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
-                    <DialogHeader>
-                        <DialogTitle className="text-base font-bold">
-                            Share with {sharePerson?.name}
-                        </DialogTitle>
-                        <DialogDescription className="text-xs leading-relaxed">
-                            Choose how you want to send the prefilled balance reminder.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <button
-                            type="button"
-                            onClick={() => handleShareMethod('sms')}
-                            className="rounded-2xl border border-border bg-background/60 p-4 text-left transition-all hover:border-primary/30 hover:bg-accent active:scale-[0.98]"
-                        >
-                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card/80 text-muted-foreground">
-                                <MessageSquare className="h-5 w-5" />
-                            </div>
-                            <p className="text-sm font-black text-foreground">SMS</p>
-                            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Open text message</p>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={() => handleShareMethod('whatsapp')}
-                            className="rounded-2xl border border-border bg-background/60 p-4 text-left transition-all hover:border-primary/30 hover:bg-accent active:scale-[0.98]"
-                        >
-                            <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-primary/20 bg-accent/70 text-primary">
-                                <MessageCircle className="h-5 w-5" />
-                            </div>
-                            <p className="text-sm font-black text-foreground">WhatsApp</p>
-                            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Open chat message</p>
-                        </button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
             <Dialog open={isPhoneDialogOpen} onOpenChange={setIsPhoneDialogOpen}>
                 <DialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
                     <DialogHeader>
                         <DialogTitle className="text-base font-bold">
-                            Add {sharePerson?.name}&apos;s number
+                            Add {reminderPerson?.name}&apos;s number
                         </DialogTitle>
                         <DialogDescription className="text-xs leading-relaxed">
-                            We will save it for future reminders in this lending ledger.
+                            We will save it and open a prefilled WhatsApp reminder.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSavePhoneAndShare} className="space-y-4">
+                    <form onSubmit={handleSavePhoneAndRemind} className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="lending-contact-phone" className="text-[10px] font-bold text-muted-foreground">
                                 Mobile number
@@ -998,7 +970,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                                 variant="outline"
                                 className="h-11 flex-1 rounded-xl border-primary/20 bg-card/80 text-primary hover:bg-accent/70"
                             >
-                                Save & Share
+                                Save & Remind
                             </Button>
                         </div>
                     </form>
