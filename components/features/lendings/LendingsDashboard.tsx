@@ -547,7 +547,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
     };
 
     return (
-        <div className="min-h-screen pb-44 page-enter">
+        <div className="min-h-screen pb-36 page-enter">
             {/* Header */}
             <div className="sticky top-0 z-30 bg-background/82 backdrop-blur-xl border-b border-border/70">
                 <div className="px-4 py-3 flex items-center justify-between">
