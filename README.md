@@ -1,6 +1,8 @@
 # CashBook Ledger
 
-A modern, mobile-first expense tracking application built with Next.js, Supabase, and Telegram integration.
+Mobile-first personal expense and lending ledger. Next.js, Supabase/Postgres, Better Auth (Google), and a Telegram bot for quick lending entries.
+
+**Status:** personal production app on Vercel. Private finances — treat env and DB as sensitive.
 
 ## Features
 
@@ -21,40 +23,38 @@ npm install
 
 ### 2. Set up environment variables
 
-Create a `.env.local` file with the following variables:
-
-```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-# Better Auth Configuration
-BETTER_AUTH_SECRET=your_random_secret_here
-BETTER_AUTH_URL=http://localhost:3000
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-# Telegram Bot Configuration (for LENDINGS feature)
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=YourBotUsername
-
-# Protects the weekly Vercel database keep-alive endpoint
-CRON_SECRET=use_a_random_secret_with_at_least_16_characters
+```bash
+cp .env.example .env.local
 ```
+
+Fill in every key. `.env.example` is the full list (Supabase, `DATABASE_URL`, Better Auth, Telegram, cron).
 
 ### 3. Set up the database
 
 Run the SQL scripts in your Supabase SQL Editor:
 1. `supabase-schema.sql` - Main tables
-2. `supabase-schema-lendings.sql` - Telegram/Lendings tables
+2. Apply new files in `migrations/` in filename order when upgrading an existing database.
 
-### 4. Run the development server
+### 4. Run, test, build
 
 ```bash
-npm run dev
+npm run dev      # http://localhost:3000
+npm test         # lending domain unit tests
+npm run lint
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+## Where things live
+
+| Path | Role |
+| --- | --- |
+| `app/` | Pages and `app/api/*` routes |
+| `components/` | App shell, feature UI, primitives |
+| `lib/lending-domain.ts` | Pure lending parse/math (tested) |
+| `lib/server/` | Postgres, lending service, session |
+| `migrations/` | Incremental SQL for existing DBs |
+| `docs/agent-handoff.md` | What changed recently |
+| `AGENTS.md` | Notes for coding agents |
 
 ## Telegram Bot Setup
 
@@ -74,7 +74,7 @@ After deploying, set your webhook:
 ```bash
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://your-app-domain.com/api/telegram/webhook"}'
+  -d '{"url": "https://your-app-domain.com/api/telegram/webhook", "secret_token": "<TELEGRAM_WEBHOOK_SECRET>"}'
 ```
 
 ### Bot Commands

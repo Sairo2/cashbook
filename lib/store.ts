@@ -1,11 +1,28 @@
-import { Ledger, LendingContact, Transaction } from './supabase';
+import {
+    Ledger,
+    LendingContact,
+    LendingEntryInput,
+    LendingEntryResult,
+    LendingRecord,
+    Transaction,
+} from './supabase';
+
+export class ApiClientError extends Error {
+    constructor(public readonly code: string, message: string, public readonly status: number) {
+        super(message);
+    }
+}
 
 // This is the CLIENT-side data layer. It never talks to Supabase directly —
 // all access goes through authenticated API routes under /app/api, which verify
 // the session server-side and enforce per-user ownership (see lib/server/db.ts).
 // The client is never trusted to supply its own user id.
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T | null> {
+async function fetchJson<T>(
+    input: string,
+    init?: RequestInit,
+    throwOnError = false
+): Promise<T | null> {
     try {
         const response = await fetch(input, {
             ...init,
@@ -15,11 +32,26 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T | null
             },
         });
         if (!response.ok) {
+            const payload = await response.json().catch(() => null);
+            const error = payload?.error;
+            const message = typeof error === 'string'
+                ? error
+                : error?.message || 'The request could not be completed.';
+            const code = typeof error === 'object' && error?.code
+                ? error.code
+                : `HTTP_${response.status}`;
+            const apiError = new ApiClientError(code, message, response.status);
+            if (throwOnError) throw apiError;
+            console.error(`Request to ${input} failed:`, apiError);
             return null;
         }
         return (await response.json()) as T;
     } catch (error) {
+        if (throwOnError && error instanceof ApiClientError) throw error;
         console.error(`Request to ${input} failed:`, error);
+        if (throwOnError) {
+            throw new ApiClientError('NETWORK_ERROR', 'Unable to reach CashBook. Check your connection.', 0);
+        }
         return null;
     }
 }
@@ -148,6 +180,29 @@ export async function createTransaction(
         method: 'POST',
         body: JSON.stringify(data),
     });
+}
+
+export async function getLendingRecords(ledgerId: string): Promise<LendingRecord[]> {
+    const response = await fetchJson<{ data: LendingRecord[] }>(
+        `/api/lendings/entries?ledgerId=${encodeURIComponent(ledgerId)}`,
+        undefined,
+        true
+    );
+    return response?.data || [];
+}
+
+export async function createLendingEntry(
+    input: LendingEntryInput
+): Promise<LendingEntryResult | null> {
+    const response = await fetchJson<{ data: LendingEntryResult }>(
+        '/api/lendings/entries',
+        {
+            method: 'POST',
+            body: JSON.stringify(input),
+        },
+        true
+    );
+    return response?.data || null;
 }
 
 export async function deleteTransaction(id: string): Promise<boolean> {

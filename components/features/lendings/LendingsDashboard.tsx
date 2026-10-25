@@ -52,10 +52,11 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Transaction, Ledger } from '@/lib/supabase';
+import { LendingEntryInput, LendingRecord, Transaction, Ledger } from '@/lib/supabase';
 import {
     getTransactionsByLedger,
-    createTransaction,
+    createLendingEntry,
+    getLendingRecords,
     updateLedger,
     deleteLedger,
     getLendingContacts,
@@ -164,6 +165,7 @@ function getWhatsAppReminderUrl(phoneNumber: string, message: string): string {
 export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onLedgerDeleted }: LendingsDashboardProps) {
     const [currentLedger, setCurrentLedger] = React.useState<Ledger>(ledger);
     const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+    const [lendingRecords, setLendingRecords] = React.useState<LendingRecord[]>([]);
     const [contactsByPerson, setContactsByPerson] = React.useState<Record<string, LendingContactInfo>>({});
     const [loading, setLoading] = React.useState(true);
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
@@ -176,6 +178,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isSettlementDialogOpen, setIsSettlementDialogOpen] = React.useState(false);
     const [isSettling, setIsSettling] = React.useState(false);
+    const [settlementError, setSettlementError] = React.useState('');
 
     // Person detail state
     const [selectedPerson, setSelectedPerson] = React.useState<PersonBalance | null>(null);
@@ -210,6 +213,18 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
         loadTransactions();
     }, [loadTransactions]);
 
+    const loadLendingRecords = React.useCallback(async () => {
+        try {
+            setLendingRecords(await getLendingRecords(currentLedger.id));
+        } catch (error) {
+            console.error('Failed to load lending records:', error);
+        }
+    }, [currentLedger.id]);
+
+    React.useEffect(() => {
+        loadLendingRecords();
+    }, [loadLendingRecords]);
+
     const loadContacts = React.useCallback(async () => {
         const contacts = await getLendingContacts(userId, currentLedger.id);
         const nextContacts: Record<string, LendingContactInfo> = {};
@@ -231,56 +246,72 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
         setCurrentLedger(ledger);
     }, [ledger]);
 
-    const handleAdd = async (data: Omit<Transaction, 'id' | 'created_at'>) => {
-        const newTransaction = await createTransaction(data);
-        if (newTransaction) {
-            setTransactions(prev => [newTransaction, ...prev]);
+    const handleAdd = async (data: LendingEntryInput) => {
+        const result = await createLendingEntry(data);
+        if (result) {
+            setTransactions(prev => [result.transaction, ...prev]);
+            await loadLendingRecords();
+            return true;
         }
+        return false;
     };
 
     const handleMarkAsReceived = async () => {
-        if (!selectedPerson || selectedPerson.balance <= 0) return;
+        if (!selectedPerson || selectedPerson.balance === 0) return;
 
         setIsSettling(true);
+        setSettlementError('');
         try {
-            const settlement = await createTransaction({
+            const result = await createLendingEntry({
                 ledger_id: currentLedger.id,
-                type: 'cash_in',
-                amount: selectedPerson.balance,
-                title: `Settlement received from ${selectedPerson.name}`,
-                category: 'Repayment',
+                intent: selectedPerson.balance > 0 ? 'received' : 'repaid',
+                amount: Math.abs(selectedPerson.balance),
+                title: selectedPerson.balance > 0
+                    ? `Settlement received from ${selectedPerson.name}`
+                    : `Settlement paid to ${selectedPerson.name}`,
                 payment_mode: 'Cash',
                 person: selectedPerson.name,
             });
 
-            if (settlement) {
-                setTransactions(prev => [settlement, ...prev]);
+            if (result) {
+                setTransactions(prev => [result.transaction, ...prev]);
+                await loadLendingRecords();
                 setIsSettlementDialogOpen(false);
             }
+        } catch (error) {
+            setSettlementError(error instanceof Error ? error.message : 'Could not record this repayment.');
         } finally {
             setIsSettling(false);
         }
     };
 
-    const handleSettleRecord = async (record: Transaction): Promise<boolean> => {
-        const settlement = await createTransaction({
+    const handleSettleRecord = async (record: Transaction, amount: number): Promise<boolean> => {
+        if (!record.person) return false;
+        const isBorrowing = record.category.toLowerCase().includes('borrow');
+        const result = await createLendingEntry({
             ledger_id: currentLedger.id,
-            type: 'cash_in',
-            amount: record.amount,
-            title: `Settlement received for ${record.title}`,
-            category: 'Repayment',
+            intent: isBorrowing ? 'repaid' : 'received',
+            amount,
+            title: isBorrowing
+                ? `Repayment made for ${record.title}`
+                : `Settlement received for ${record.title}`,
             payment_mode: 'Cash',
             person: record.person,
-            settles_transaction_id: record.id,
+            target_transaction_id: record.id,
         });
 
-        if (!settlement) return false;
+        if (!result) return false;
 
-        setTransactions(prev => [settlement, ...prev]);
+        setTransactions(prev => [result.transaction, ...prev]);
+        await loadLendingRecords();
         return true;
     };
 
-    const settledRecordIds = React.useMemo(
+    const lendingRecordsByTransaction = React.useMemo(
+        () => new Map(lendingRecords.map(record => [record.transaction_id, record])),
+        [lendingRecords]
+    );
+    const legacySettledRecordIds = React.useMemo(
         () => new Set(transactions.flatMap(transaction =>
             transaction.settles_transaction_id ? [transaction.settles_transaction_id] : []
         )),
@@ -294,11 +325,12 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
 
     // Get list of existing people for the dropdown
     const existingPeople = React.useMemo(() => {
-        const people = new Set<string>();
+        const people = new Map<string, string>();
         transactions.forEach(t => {
-            if (t.person) people.add(t.person);
+            const name = t.person?.trim();
+            if (name && !people.has(name.toLowerCase())) people.set(name.toLowerCase(), name);
         });
-        return Array.from(people).sort();
+        return Array.from(people.values()).sort((a, b) => a.localeCompare(b));
     }, [transactions]);
 
     // Calculate person balances
@@ -306,10 +338,11 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
         const balanceMap: Record<string, PersonBalance> = {};
 
         transactions.forEach(t => {
-            const personName = t.person || 'Unknown';
+            const personName = t.person?.trim() || 'Unknown';
+            const personKey = personName.toLowerCase();
 
-            if (!balanceMap[personName]) {
-                balanceMap[personName] = {
+            if (!balanceMap[personKey]) {
+                balanceMap[personKey] = {
                     name: personName,
                     balance: 0,
                     totalLent: 0,
@@ -319,21 +352,21 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                 };
             }
 
-            balanceMap[personName].transactions.push(t);
+            balanceMap[personKey].transactions.push(t);
 
             // cash_out = You lent money (they owe you)
             // cash_in = They paid you back (received)
             if (t.type === 'cash_out') {
-                balanceMap[personName].balance += t.amount;
-                balanceMap[personName].totalLent += t.amount;
+                balanceMap[personKey].balance += t.amount;
+                balanceMap[personKey].totalLent += t.amount;
             } else {
-                balanceMap[personName].balance -= t.amount;
-                balanceMap[personName].totalReceived += t.amount;
+                balanceMap[personKey].balance -= t.amount;
+                balanceMap[personKey].totalReceived += t.amount;
             }
 
             const txDate = new Date(t.created_at);
-            if (txDate > balanceMap[personName].lastTransactionDate) {
-                balanceMap[personName].lastTransactionDate = txDate;
+            if (txDate > balanceMap[personKey].lastTransactionDate) {
+                balanceMap[personKey].lastTransactionDate = txDate;
             }
         });
 
@@ -935,14 +968,16 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                                     Remind on WhatsApp
                                 </Button>
 
-                                {selectedPerson.balance > 0 && (
+                                {selectedPerson.balance !== 0 && (
                                     <Button
                                         type="button"
                                         onClick={() => setIsSettlementDialogOpen(true)}
                                         className="mt-2 h-9 w-full rounded-xl bg-primary text-xs font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98]"
                                     >
                                         <CheckCircle2 className="h-3.5 w-3.5" />
-                                        Mark ₹{selectedPerson.balance.toLocaleString('en-IN')} as received
+                                        {selectedPerson.balance > 0
+                                            ? `Mark ₹${selectedPerson.balance.toLocaleString('en-IN')} as received`
+                                            : `Mark ₹${Math.abs(selectedPerson.balance).toLocaleString('en-IN')} as paid`}
                                     </Button>
                                 )}
                             </SheetHeader>
@@ -1084,10 +1119,13 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
             <AlertDialog open={isSettlementDialogOpen} onOpenChange={setIsSettlementDialogOpen}>
                 <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-base font-bold">Mark as received?</AlertDialogTitle>
+                        <AlertDialogTitle className="text-base font-bold">
+                            {selectedPerson && selectedPerson.balance < 0 ? 'Mark as paid?' : 'Mark as received?'}
+                        </AlertDialogTitle>
                         <AlertDialogDescription className="text-xs leading-relaxed text-muted-foreground">
-                            This records ₹{selectedPerson?.balance.toLocaleString('en-IN')} as a cash repayment from {selectedPerson?.name} and settles the current balance.
+                            This records ₹{Math.abs(selectedPerson?.balance || 0).toLocaleString('en-IN')} as a cash repayment {selectedPerson && selectedPerson.balance < 0 ? 'to' : 'from'} {selectedPerson?.name} and settles the current balance.
                         </AlertDialogDescription>
+                        {settlementError && <p className="text-[11px] font-semibold text-destructive" role="alert">{settlementError}</p>}
                     </AlertDialogHeader>
                     <AlertDialogFooter className="mt-3 flex-row gap-2 sm:gap-0">
                         <AlertDialogCancel className="mt-0 flex-1 rounded-xl border-border bg-muted py-2 text-xs hover:bg-accent">
@@ -1098,7 +1136,7 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                             disabled={isSettling}
                             className="flex-1 rounded-xl bg-primary py-2 text-xs text-primary-foreground hover:bg-primary/90"
                         >
-                            {isSettling ? 'Saving...' : 'Mark as Received'}
+                            {isSettling ? 'Saving...' : selectedPerson && selectedPerson.balance < 0 ? 'Mark as Paid' : 'Mark as Received'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -1116,7 +1154,12 @@ export function LendingsDashboard({ ledger, onBack, userId, onLedgerUpdated, onL
                 onTransactionUpdated={handleTransactionUpdated}
                 onTransactionDeleted={handleTransactionDeleted}
                 onSettleRecord={handleSettleRecord}
-                isRecordSettled={selectedTransaction ? settledRecordIds.has(selectedTransaction.id) : false}
+                lendingRecord={selectedTransaction
+                    ? lendingRecordsByTransaction.get(selectedTransaction.id)
+                    : undefined}
+                isRecordSettled={selectedTransaction
+                    ? legacySettledRecordIds.has(selectedTransaction.id)
+                    : false}
                 existingPeople={existingPeople}
             />
         </div>

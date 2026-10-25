@@ -88,11 +88,33 @@ CREATE TABLE IF NOT EXISTS lendings (
     original_amount DECIMAL(12,2) NOT NULL,
     remaining_amount DECIMAL(12,2) NOT NULL,
     notes TEXT,
+    kind TEXT NOT NULL DEFAULT 'receivable' CHECK (kind IN ('receivable', 'payable')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_lendings_transaction_id ON lendings(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_lendings_status ON lendings(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lendings_transaction_unique ON lendings(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_lendings_person_status ON lendings(lower(borrower_name), kind, status);
+
+CREATE TABLE IF NOT EXISTS lending_payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    lending_id UUID NOT NULL REFERENCES lendings(id) ON DELETE CASCADE,
+    transaction_id UUID NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    amount DECIMAL(12,2) NOT NULL CHECK (amount > 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (lending_id, transaction_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lending_payments_lending_id ON lending_payments(lending_id);
+CREATE INDEX IF NOT EXISTS idx_lending_payments_transaction_id ON lending_payments(transaction_id);
+
+CREATE TABLE IF NOT EXISTS telegram_updates (
+    update_id BIGINT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'processing' CHECK (status IN ('processing', 'processed')),
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    processed_at TIMESTAMP WITH TIME ZONE
+);
 
 CREATE TABLE IF NOT EXISTS lending_contacts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -163,6 +185,8 @@ ALTER TABLE telegram_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE telegram_link_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lendings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lending_contacts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lending_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telegram_updates ENABLE ROW LEVEL SECURITY;
 
 -- IMPORTANT:
 -- These owner-scoped policies assume Supabase can identify the current user via

@@ -40,6 +40,44 @@ export interface LendingContact {
     updated_at: string;
 }
 
+export type LendingIntent = 'lent' | 'repaid' | 'received' | 'borrowed';
+export type LendingKind = 'receivable' | 'payable';
+
+export interface LendingRecord {
+    id: string;
+    transaction_id: string;
+    borrower_name: string;
+    due_date?: string;
+    status: 'pending' | 'partial' | 'settled';
+    original_amount: number;
+    remaining_amount: number;
+    notes?: string;
+    kind: LendingKind;
+    created_at: string;
+}
+
+export interface LendingEntryInput {
+    ledger_id: string;
+    intent: LendingIntent;
+    amount: number;
+    person: string;
+    title?: string;
+    payment_mode?: string;
+    due_date?: string;
+    target_transaction_id?: string;
+}
+
+export interface LendingEntryResult {
+    transaction: Transaction;
+    lending?: LendingRecord;
+    allocations: Array<{
+        lending_id: string;
+        transaction_id: string;
+        amount: number;
+    }>;
+    unallocated_amount: number;
+}
+
 // Default categories and payment modes for new ledgers
 export const DEFAULT_CATEGORIES = [
     'Food',

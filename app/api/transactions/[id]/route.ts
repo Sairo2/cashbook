@@ -3,8 +3,11 @@ import { getSessionUserId } from '@/lib/server/session';
 import {
     getTransactionForUser,
     updateTransactionForUser,
-    deleteTransactionForUser,
 } from '@/lib/server/db';
+import {
+    deleteTransactionWithLendingEffectsForUser,
+    LendingDomainError,
+} from '@/lib/server/lending-service';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -56,9 +59,17 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     }
 
     const { id } = await params;
-    const success = await deleteTransactionForUser(userId, id);
-    if (!success) {
-        return NextResponse.json({ error: 'Failed to delete transaction' }, { status: 404 });
+    try {
+        await deleteTransactionWithLendingEffectsForUser(userId, id);
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        if (error instanceof LendingDomainError) {
+            return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.status });
+        }
+        console.error('Failed to delete transaction:', error);
+        return NextResponse.json(
+            { error: { code: 'TRANSACTION_DELETE_FAILED', message: 'Could not delete transaction.' } },
+            { status: 500 }
+        );
     }
-    return NextResponse.json({ success: true });
 }

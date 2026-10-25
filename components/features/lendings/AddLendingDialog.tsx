@@ -16,7 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Transaction, Ledger } from '@/lib/supabase';
+import { LendingEntryInput, Ledger } from '@/lib/supabase';
 
 type MoneyDirection = 'gave' | 'got';
 type LendingIntent = 'lent' | 'repaid' | 'received' | 'borrowed';
@@ -26,7 +26,7 @@ interface AddLendingDialogProps {
     onClose: () => void;
     direction: MoneyDirection;
     ledger: Ledger;
-    onAdd: (data: Omit<Transaction, 'id' | 'created_at'>) => void;
+    onAdd: (data: LendingEntryInput) => Promise<boolean>;
     existingPeople?: string[];
 }
 
@@ -42,7 +42,10 @@ export function AddLendingDialog({
     const [person, setPerson] = React.useState('');
     const [newPerson, setNewPerson] = React.useState('');
     const [note, setNote] = React.useState('');
+    const [dueDate, setDueDate] = React.useState('');
     const [showNewPerson, setShowNewPerson] = React.useState(false);
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [saveError, setSaveError] = React.useState('');
 
     // Intent: For "gave" → lent or repaid, For "got" → received or borrowed
     const [intent, setIntent] = React.useState<LendingIntent>(
@@ -66,7 +69,7 @@ export function AddLendingDialog({
     const currentIntent = intentLabels[intent];
     const isEmerald = currentIntent.color === 'emerald';
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const parsed = parseFloat(amount);
         const amountNum = isNaN(parsed) ? 0 : parsed;
@@ -75,8 +78,6 @@ export function AddLendingDialog({
         const personName = showNewPerson ? newPerson.trim() : person;
         if (!personName) return;
 
-        const transactionType = isGave ? 'cash_out' : 'cash_in';
-
         const titleMap = {
             lent: `Lent to ${personName}`,
             repaid: `Repaid to ${personName}`,
@@ -84,24 +85,31 @@ export function AddLendingDialog({
             borrowed: `Borrowed from ${personName}`,
         };
 
-        const categoryMap = {
-            lent: 'Lending',
-            repaid: 'Repayment',
-            received: 'Repayment',
-            borrowed: 'Borrowing',
-        };
+        setIsSaving(true);
+        setSaveError('');
+        try {
+            const saved = await onAdd({
+                ledger_id: ledger.id,
+                intent,
+                amount: amountNum,
+                title: note.trim() || titleMap[intent],
+                payment_mode: 'Cash',
+                person: personName,
+                due_date: dueDate || undefined,
+            });
 
-        onAdd({
-            ledger_id: ledger.id,
-            type: transactionType,
-            amount: amountNum,
-            title: note.trim() || titleMap[intent],
-            category: categoryMap[intent],
-            payment_mode: 'Cash',
-            person: personName,
-        });
+            if (saved) {
+                handleClose();
+                return;
+            }
 
-        handleClose();
+            setSaveError('Could not record this lending. Please try again.');
+        } catch (error) {
+            console.error('Failed to record lending:', error);
+            setSaveError(error instanceof Error ? error.message : 'Could not record this lending. Please try again.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleClose = () => {
@@ -109,7 +117,10 @@ export function AddLendingDialog({
         setPerson('');
         setNewPerson('');
         setNote('');
+        setDueDate('');
         setShowNewPerson(false);
+        setSaveError('');
+        setIsSaving(false);
         onClose();
     };
 
@@ -279,6 +290,22 @@ export function AddLendingDialog({
                     </div>
 
                     {/* Note */}
+                    {(intent === 'lent' || intent === 'borrowed') && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="lending-due-date" className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                                Due date <span className="text-muted-foreground/60 text-[9px] font-semibold">(optional)</span>
+                            </Label>
+                            <Input
+                                id="lending-due-date"
+                                type="date"
+                                value={dueDate}
+                                onChange={(event) => setDueDate(event.target.value)}
+                                className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
+                            />
+                        </div>
+                    )}
+
+                    {/* Note */}
                     <div className="space-y-1.5">
                         <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Note <span className="text-muted-foreground/60 text-[9px] font-semibold">(optional)</span></Label>
                         <Input
@@ -288,6 +315,12 @@ export function AddLendingDialog({
                             className="text-xs h-11 surface-card border border-border focus-visible:ring-1 focus-visible:ring-primary/45 rounded-xl font-medium"
                         />
                     </div>
+
+                    {saveError && (
+                        <p className="text-[11px] font-semibold text-destructive" role="alert">
+                            {saveError}
+                        </p>
+                    )}
 
                     </div>
 
@@ -303,14 +336,14 @@ export function AddLendingDialog({
                         </Button>
                         <Button
                             type="submit"
-                            disabled={!isValid}
+                            disabled={!isValid || isSaving}
                             className={`flex-1 h-11 text-xs font-bold uppercase tracking-wider rounded-xl shadow-md active:scale-98 transition-all ${
                                 isEmerald
                                     ? 'cash-in-gradient hover:opacity-95 shadow-primary/10'
                                     : 'cash-out-gradient hover:opacity-95 shadow-destructive/10'
                             }`}
                         >
-                            Record Lending
+                            {isSaving ? 'Recording...' : 'Record Lending'}
                         </Button>
                     </div>
                 </form>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import {
     getLinkedUser,
     verifyAndLinkAccount,
@@ -6,6 +7,9 @@ import {
     createLendingFromMessage,
     sendTelegramMessage,
     getHelpMessage,
+    claimTelegramUpdate,
+    completeTelegramUpdate,
+    releaseTelegramUpdate,
 } from '@/lib/telegram';
 
 // Telegram webhook payload types
@@ -34,11 +38,35 @@ interface TelegramUpdate {
 }
 
 export async function POST(request: NextRequest) {
+    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    const suppliedSecret = request.headers.get('x-telegram-bot-api-secret-token');
+    if (!expectedSecret) {
+        console.error('TELEGRAM_WEBHOOK_SECRET is not configured');
+        return NextResponse.json({ error: 'Webhook is not configured' }, { status: 503 });
+    }
+    const suppliedBuffer = Buffer.from(suppliedSecret || '');
+    const expectedBuffer = Buffer.from(expectedSecret);
+    if (
+        suppliedBuffer.length !== expectedBuffer.length ||
+        !timingSafeEqual(suppliedBuffer, expectedBuffer)
+    ) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    let claimedUpdateId: number | null = null;
     try {
         const update: TelegramUpdate = await request.json();
+        if (!Number.isSafeInteger(update.update_id)) {
+            return NextResponse.json({ error: 'Invalid update' }, { status: 400 });
+        }
+        if (!(await claimTelegramUpdate(update.update_id))) {
+            return NextResponse.json({ ok: true, duplicate: true });
+        }
+        claimedUpdateId = update.update_id;
 
         // Only handle text messages
         if (!update.message?.text) {
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
@@ -74,12 +102,14 @@ export async function POST(request: NextRequest) {
                     );
                 }
             }
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
         // Handle /help command
         if (text === '/help') {
             await sendTelegramMessage(chatId, getHelpMessage());
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
@@ -97,6 +127,7 @@ export async function POST(request: NextRequest) {
                     'Open CashBook app → Settings → Link Telegram'
                 );
             }
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
@@ -107,6 +138,7 @@ export async function POST(request: NextRequest) {
                 '⚠️ Please link your account first!\n\n' +
                 'Open CashBook app → Settings → Link Telegram'
             );
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
@@ -119,6 +151,7 @@ export async function POST(request: NextRequest) {
                 '<b>Example:</b> <code>500 john tomorrow</code>\n\n' +
                 'Send /help for more info.'
             );
+            await completeTelegramUpdate(update.update_id);
             return NextResponse.json({ ok: true });
         }
 
@@ -126,10 +159,12 @@ export async function POST(request: NextRequest) {
         const result = await createLendingFromMessage(parsed, linkedUser.user_id);
         await sendTelegramMessage(chatId, result.message);
 
+        await completeTelegramUpdate(update.update_id);
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error('Telegram webhook error:', error);
-        return NextResponse.json({ ok: true }); // Always return 200 to Telegram
+        if (claimedUpdateId !== null) await releaseTelegramUpdate(claimedUpdateId);
+        return NextResponse.json({ error: 'Temporary webhook failure' }, { status: 500 });
     }
 }
 

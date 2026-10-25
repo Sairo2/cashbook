@@ -27,7 +27,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Transaction, Ledger } from '@/lib/supabase';
+import { LendingRecord, Transaction, Ledger } from '@/lib/supabase';
 import { updateTransaction, deleteTransaction } from '@/lib/store';
 
 type LendingIntent = 'lent' | 'repaid' | 'received' | 'borrowed';
@@ -39,7 +39,8 @@ interface EditLendingDialogProps {
     ledger: Ledger;
     onTransactionUpdated: (transaction: Transaction) => void;
     onTransactionDeleted: (transactionId: string) => void;
-    onSettleRecord?: (transaction: Transaction) => Promise<boolean>;
+    onSettleRecord?: (transaction: Transaction, amount: number) => Promise<boolean>;
+    lendingRecord?: LendingRecord;
     isRecordSettled?: boolean;
     existingPeople?: string[];
 }
@@ -51,7 +52,8 @@ export function EditLendingDialog({
     onTransactionUpdated,
     onTransactionDeleted,
     onSettleRecord,
-    isRecordSettled = false,
+    lendingRecord,
+    isRecordSettled: legacyIsRecordSettled = false,
     existingPeople = [],
 }: EditLendingDialogProps) {
     const [amount, setAmount] = React.useState('');
@@ -65,6 +67,8 @@ export function EditLendingDialog({
     const [isSaving, setIsSaving] = React.useState(false);
     const [isSettleDialogOpen, setIsSettleDialogOpen] = React.useState(false);
     const [isSettlingRecord, setIsSettlingRecord] = React.useState(false);
+    const [settlementAmount, setSettlementAmount] = React.useState('');
+    const [settlementError, setSettlementError] = React.useState('');
 
     // Initialize form when transaction changes
     React.useEffect(() => {
@@ -94,8 +98,10 @@ export function EditLendingDialog({
             } else {
                 setIntent(category.includes('borrow') ? 'borrowed' : 'received');
             }
+            setSettlementAmount((lendingRecord?.remaining_amount ?? transaction.amount).toString());
+            setSettlementError('');
         }
-    }, [transaction, existingPeople]);
+    }, [transaction, existingPeople, lendingRecord]);
 
     const isGave = intent === 'lent' || intent === 'repaid';
 
@@ -169,9 +175,23 @@ export function EditLendingDialog({
     const handleSettleRecord = async () => {
         if (!transaction || !onSettleRecord) return;
 
+        const paymentAmount = Number(settlementAmount);
+        const maximum = lendingRecord?.remaining_amount ?? transaction.amount;
+        if (!Number.isFinite(paymentAmount) || paymentAmount <= 0 || paymentAmount > maximum) {
+            setSettlementError(`Enter an amount up to ₹${maximum.toLocaleString('en-IN')}.`);
+            return;
+        }
+
         setIsSettlingRecord(true);
-        const settled = await onSettleRecord(transaction);
-        setIsSettlingRecord(false);
+        setSettlementError('');
+        let settled = false;
+        try {
+            settled = await onSettleRecord(transaction, paymentAmount);
+        } catch (error) {
+            setSettlementError(error instanceof Error ? error.message : 'Could not record this repayment.');
+        } finally {
+            setIsSettlingRecord(false);
+        }
 
         if (settled) {
             setIsSettleDialogOpen(false);
@@ -185,12 +205,16 @@ export function EditLendingDialog({
         setNewPerson('');
         setNote('');
         setShowNewPerson(false);
+        setSettlementAmount('');
+        setSettlementError('');
         onClose();
     };
 
     const parsedAmount = parseFloat(amount);
     const isValid = !isNaN(parsedAmount) && parsedAmount > 0 && (showNewPerson ? newPerson.trim() : person);
-    const canSettleRecord = transaction?.type === 'cash_out' && !transaction.category.toLowerCase().includes('repay');
+    const canSettleRecord = ['lending', 'borrowing'].includes(transaction?.category.toLowerCase() || '');
+    const isRecordSettled = legacyIsRecordSettled || lendingRecord?.status === 'settled';
+    const isPayable = transaction?.category.toLowerCase() === 'borrowing';
 
     if (!transaction) return null;
 
@@ -233,7 +257,11 @@ export function EditLendingDialog({
                                 disabled={isRecordSettled}
                                 className="h-11 w-full rounded-xl border-primary/25 bg-primary/5 text-xs font-bold uppercase tracking-wider text-primary hover:bg-primary/10 disabled:opacity-100"
                             >
-                                {isRecordSettled ? 'This record is settled' : 'Mark this record as received'}
+                                {isRecordSettled
+                                    ? 'This record is settled'
+                                    : lendingRecord?.status === 'partial'
+                                        ? `${isPayable ? 'Pay' : 'Receive'} remaining ₹${lendingRecord.remaining_amount.toLocaleString('en-IN')}`
+                                        : isPayable ? 'Record a payment' : 'Record a repayment'}
                             </Button>
                         </div>
                     )}
@@ -414,10 +442,30 @@ export function EditLendingDialog({
             <AlertDialog open={isSettleDialogOpen} onOpenChange={setIsSettleDialogOpen}>
                 <AlertDialogContent className="max-w-[90vw] sm:max-w-md rounded-2xl surface-card-elevated border-border">
                     <AlertDialogHeader>
-                        <AlertDialogTitle className="text-base font-bold">Mark this record as received?</AlertDialogTitle>
+                        <AlertDialogTitle className="text-base font-bold">
+                            {isPayable ? 'Record payment' : 'Record repayment'}
+                        </AlertDialogTitle>
                         <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
-                            This adds a ₹{transaction.amount.toLocaleString('en-IN')} repayment from {transaction.person || 'this person'} and settles only this lending record.
+                            Enter a full or partial amount. The remaining balance is ₹{(lendingRecord?.remaining_amount ?? transaction.amount).toLocaleString('en-IN')}.
                         </AlertDialogDescription>
+                        <div className="space-y-1.5 pt-2">
+                            <Label htmlFor="settlement-amount" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                Amount
+                            </Label>
+                            <Input
+                                id="settlement-amount"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                max={lendingRecord?.remaining_amount ?? transaction.amount}
+                                value={settlementAmount}
+                                onChange={(event) => {
+                                    setSettlementAmount(event.target.value);
+                                    setSettlementError('');
+                                }}
+                            />
+                            {settlementError && <p className="text-[11px] font-semibold text-destructive" role="alert">{settlementError}</p>}
+                        </div>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="flex-row gap-2 sm:gap-0 mt-3">
                         <AlertDialogCancel className="flex-1 mt-0 text-xs py-2 rounded-xl bg-muted border-border hover:bg-accent">Cancel</AlertDialogCancel>
@@ -426,7 +474,7 @@ export function EditLendingDialog({
                             disabled={isSettlingRecord}
                             className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 text-xs py-2 rounded-xl shadow-md active:scale-98"
                         >
-                            {isSettlingRecord ? 'Saving...' : 'Mark as Received'}
+                            {isSettlingRecord ? 'Saving...' : isPayable ? 'Record Payment' : 'Record Repayment'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
